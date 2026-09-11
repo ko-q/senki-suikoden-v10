@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#191814">
+    <title>Senki Suikoden v10 Foundation</title>
+    <link rel="stylesheet" href="./styles/main.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div class="hero-heading">
+          <div>
+            <p class="eyebrow">Separate v10 solution</p>
+            <h1>Senki Suikoden v10</h1>
+          </div>
+          <button
+            id="audioButton"
+            class="audio-button"
+            type="button"
+            aria-pressed="false"
+          >Sound: Start</button>
+        </div>
+        <p class="subtitle">OO battle, resilient saves, and v9 audio</p>
+      </header>
+
+      <section class="persistence-card" aria-labelledby="persistenceTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Transactional persistence</p>
+            <h2 id="persistenceTitle">Save and load</h2>
+          </div>
+          <div class="persistence-toolbar">
+            <button id="newBattleButton" class="secondary-button" type="button">New battle</button>
+            <button id="refreshSlotsButton" class="secondary-button" type="button">Refresh</button>
+          </div>
+        </div>
+        <p id="persistenceStatus" class="persistence-status" data-tone="info" aria-live="polite">
+          Checking save data.
+        </p>
+        <p id="persistenceUnavailable" class="persistence-unavailable" hidden>
+          Browser storage is unavailable. Save and load controls are disabled.
+        </p>
+        <div
+          id="manualSlotList"
+          class="save-slot-list"
+          role="list"
+          aria-label="Twenty manual save slots"
+          aria-live="polite"
+        ></div>
+      </section>
+
+      <div id="battleHost" class="battle-host" aria-live="polite"></div>
+
+      <template id="battleViewTemplate">
+        <div class="battle-view" data-battle-view-root>
+          <section class="status-card" aria-live="polite">
+            <div>
+              <span class="status-label">Mode</span>
+              <strong id="modeValue">LOCKED</strong>
+            </div>
+            <div>
+              <span class="status-label">Domain</span>
+              <strong id="domainValue">Busy</strong>
+            </div>
+            <div>
+              <span class="status-label">Turn</span>
+              <strong id="turnValue">1</strong>
+            </div>
+            <div>
+              <span class="status-label">Phase</span>
+              <strong id="phaseValue">PLAYER</strong>
+            </div>
+            <div>
+              <span class="status-label">Build</span>
+              <strong id="versionValue">Loading</strong>
+            </div>
+          </section>
+
+          <section class="preview-panel" aria-labelledby="previewTitle">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Playable development fixture</p>
+                <h2 id="previewTitle">Battle vertical slice</h2>
+              </div>
+              <button id="resetButton" class="secondary-button" type="button">Clear</button>
+            </div>
+            <p id="instructionText" class="instruction">
+              Loading the development battle.
+            </p>
+            <p id="selectedUnitText" class="unit-summary">No unit selected.</p>
+            <p id="eventText" class="event-text" data-tone="info">Battle setup.</p>
+            <div class="board-scroll">
+              <div id="board" class="board" role="grid" aria-label="Development battle map"></div>
+            </div>
+            <div id="actionPanel" class="command-toolbar" aria-label="Battle commands" hidden>
+              <button id="bowButton" class="primary-button" type="button" disabled>Projectile</button>
+              <button id="chargeButton" class="primary-button" type="button" disabled>Charge</button>
+              <button id="tacticButton" class="primary-button" type="button" disabled>Tactic</button>
+              <button id="waitButton" class="primary-button" type="button" disabled>Wait</button>
+              <button id="pathButton" class="secondary-button" type="button" disabled>Path 0/0</button>
+            </div>
+            <p id="pathSummary" class="path-summary">No movement path</p>
+            <div id="tacticPanel" class="tactic-panel" aria-hidden="true" hidden>
+              <span>Choose tactic</span>
+              <div class="tactic-buttons">
+                <button id="confusionLv1Button" class="secondary-button" type="button">Confusion Lv1</button>
+                <button id="confusionLv2Button" class="secondary-button" type="button">Confusion Lv2</button>
+                <button id="confusionLv3Button" class="secondary-button" type="button">Confusion Lv3</button>
+                <button id="illusionButton" class="secondary-button" type="button">Illusion</button>
+                <button id="wideIllusionButton" class="secondary-button" type="button">Wide illusion</button>
+                <button id="fireButton" class="secondary-button" type="button">Fire</button>
+                <button id="waterButton" class="secondary-button" type="button">Water</button>
+              </div>
+            </div>
+            <div class="turn-toolbar">
+              <button id="endTurnButton" class="secondary-button" type="button" disabled>End turn</button>
+            </div>
+            <div id="facingPanel" class="facing-panel" hidden>
+              <span>Final facing</span>
+              <div class="facing-buttons">
+                <button id="facingNorthButton" class="secondary-button" type="button">North</button>
+                <button id="facingEastButton" class="secondary-button" type="button">East</button>
+                <button id="facingSouthButton" class="secondary-button" type="button">South</button>
+                <button id="facingWestButton" class="secondary-button" type="button">West</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="dialogueOverlay" class="dialogue-overlay" aria-live="polite" hidden>
+            <div class="dialogue-card">
+              <p id="dialogueSpeaker" class="dialogue-speaker"></p>
+              <p id="dialogueText" class="dialogue-text"></p>
+              <button id="dialogueNextButton" class="primary-button" type="button">Next</button>
+            </div>
+          </section>
+        </div>
+      </template>
+
+      <section class="scope-card">
+        <h2>Milestone 11 scope</h2>
+        <p>
+          This page provides twenty manual save slots, explicit fallback repair, recovery
+          choice, transactional BattleSession replacement, and v9-compatible battle audio.
+          It remains a development fixture and contains no canonical character data.
+        </p>
+      </section>
+    </main>
+
+    <section id="recoveryOverlay" class="recovery-overlay" aria-hidden="true" hidden>
+      <div class="recovery-card" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
+        <p class="eyebrow">Interrupted battle found</p>
+        <h2 id="recoveryTitle">Resume the recovery save?</h2>
+        <p id="recoverySummary" class="recovery-summary"></p>
+        <div class="recovery-actions">
+          <button id="resumeRecoveryButton" class="primary-button" type="button">Resume</button>
+          <button id="startNewFromRecoveryButton" class="secondary-button" type="button">Start new battle</button>
+        </div>
+      </div>
+    </section>
+
+    <noscript>This preview requires JavaScript modules.</noscript>
+    <script type="module" src="./src/app/bootstrap.js"></script>
+  </body>
+</html>

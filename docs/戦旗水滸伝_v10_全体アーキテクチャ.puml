@@ -1,0 +1,279 @@
+@startuml
+title 戦旗水滸伝 v10 OO再設計 - 統合レビュー反映版
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+package Boundary {
+  interface BattleCommandPort
+  interface BattlePresentationPort
+  interface BattleCheckpointPort
+}
+
+package Application {
+  class Game
+  class StageFactory
+  class SaveService
+  class SaveRepository
+  class SaveCodec
+  class SaveMigrator
+  class MigrationCatalog
+  class SaveCheckpointAdapter
+}
+
+package Audio {
+  class AudioController
+  class BattleAudioSession
+  class AudioAssetCatalog
+  class AudioCueMapper
+}
+
+package Presentation {
+  class BattleScreen
+  class BattleRenderer
+  class BattleEffectManager
+  class DialogueController
+  class BattleView
+  class BattleViewFactory
+  class PersistencePanel
+}
+
+package Orchestration {
+  class BattleController
+  class BattleSession
+  class BattleSessionFactory
+  class BattleSessionHost
+  class BattleRandom
+  class MovementService
+  class CombatService
+  class TacticService
+  class StatusService
+  class AIService
+}
+
+package Domain {
+  class Stage
+  class BattleMap
+  class MapCell
+  class Terrain
+  class TerrainCatalog
+  class Unit
+  class Character
+  class CharacterManager
+  class Army
+  class ArmyManager
+  class StageEventManager
+  class ObjectiveManager
+  class SpeechManager
+  class DialogueManager
+  class Speech
+  class Dialogue
+  class HiddenTrap
+  class BattleLog
+  class UnitControlRule
+  class StageAIConfig
+  class WideIllusionAIRule
+  class PursuitAIRule
+  class TargetPriorityAIRule
+}
+
+package Events {
+  class ReinforcementEvent
+  class BetrayalEvent
+  class MissionTransitionEvent
+  class DialogueEvent
+}
+
+package Objectives {
+  class EliminationObjective
+  class ReachObjective
+  class UnitDefeatObjective
+  class TurnLimitObjective
+  class SurviveUntilTurnObjective
+}
+
+package DTO {
+  class ActionQueryContext <<DTO>>
+  class PresentationRequest <<DTO>>
+  class CombatResult <<DTO>>
+  class TacticResult <<DTO>>
+  class PreparedBattleLoad <<DTO>>
+  class BattleSaveData <<DTO>>
+  class BattleResult <<DTO>>
+}
+
+Game --> CharacterManager
+Game --> TerrainCatalog
+Game --> StageFactory
+Game --> SaveService
+Game --> AudioController
+Game --> BattleSessionFactory : create candidate
+Game --> BattleSessionHost : transactional swap
+Game --> PersistencePanel : 20 slots / Repair UI
+Game --> SaveCheckpointAdapter
+
+BattleSessionHost *-- BattleSession
+BattleSession --> BattleController
+BattleSession --> BattleScreen
+BattleSession --> BattleRandom
+BattleSession --> BattleView
+BattleSessionFactory --> BattleViewFactory
+BattleSessionFactory --> BattleController
+BattleSessionFactory --> BattleScreen
+BattleSessionFactory --> AudioController : create BattleAudioSession
+BattleViewFactory --> BattleView
+
+BattleController ..|> BattleCommandPort
+BattleScreen --> BattleCommandPort : query / command
+BattleScreen ..|> BattlePresentationPort
+BattleController --> BattlePresentationPort : present(request, signal)
+SaveCheckpointAdapter ..|> BattleCheckpointPort
+SaveCheckpointAdapter --> SaveService
+BattleController --> BattleCheckpointPort : stable snapshot
+
+BattleScreen *-- BattleRenderer
+BattleScreen *-- BattleEffectManager
+BattleScreen *-- DialogueController
+BattleEffectManager *-- BattleAudioSession
+BattleAudioSession --> AudioController
+AudioController --> AudioAssetCatalog
+AudioController --> AudioCueMapper
+DialogueController --> Dialogue : runtime ref
+
+BattleController --> Stage
+BattleController --> BattleRandom
+BattleController --> MovementService
+BattleController --> CombatService
+BattleController --> TacticService
+BattleController --> StatusService
+BattleController --> AIService
+BattleController ..> ActionQueryContext
+BattleController ..> PresentationRequest
+BattleController ..> BattleSaveData : stable snapshot
+BattleController ..> BattleResult : completion promise
+
+MovementService --> Stage : read-only query
+CombatService --> Unit : atomic mutation
+TacticService --> Unit : atomic mutation
+StatusService --> Unit : status only
+CombatService ..> CombatResult
+TacticService ..> TacticResult
+
+AIService --> MovementService : read-only
+AIService --> CombatService : read-only API
+AIService --> TacticService : read-only API
+AIService --> BattleRandom : confirmed decision only
+
+Stage *-- BattleMap
+Stage *-- ArmyManager
+Stage *-- StageEventManager
+Stage *-- ObjectiveManager
+Stage *-- SpeechManager
+Stage *-- DialogueManager
+Stage *-- HiddenTrap
+Stage *-- BattleLog
+Stage *-- UnitControlRule
+Stage *-- StageAIConfig
+Stage o-- Unit : unitsById / unitOrder
+Stage o-- Character : mobCharacters
+Speech --> Character
+Dialogue o-- Speech
+DialogueManager o-- Dialogue
+
+BattleMap *-- MapCell
+MapCell --> Terrain
+MapCell --> Unit : actual occupant
+Unit --> Character
+ArmyManager *-- Army
+Army o-- Unit
+
+StageAIConfig o-- Unit : resolved refs
+StageAIConfig *-- WideIllusionAIRule
+StageAIConfig *-- PursuitAIRule
+StageAIConfig *-- TargetPriorityAIRule
+
+StageEventManager o-- ReinforcementEvent
+StageEventManager o-- BetrayalEvent
+StageEventManager o-- MissionTransitionEvent
+StageEventManager o-- DialogueEvent
+
+ObjectiveManager o-- EliminationObjective
+ObjectiveManager o-- ReachObjective
+ObjectiveManager o-- UnitDefeatObjective
+ObjectiveManager o-- TurnLimitObjective
+ObjectiveManager o-- SurviveUntilTurnObjective
+
+StageFactory --> CharacterManager
+StageFactory --> TerrainCatalog
+StageFactory --> Stage
+
+SaveService --> SaveRepository
+SaveService --> SaveCodec
+SaveService --> SaveMigrator
+SaveService --> StageFactory
+SaveService ..> PreparedBattleLoad
+SaveMigrator --> MigrationCatalog
+
+note right of BattleMap
+位置の唯一の正本。
+Previewは入れない。
+外部へはPosition値を返す。
+end note
+
+note right of MovementService
+query / validationのみ。
+moveUnitはBattleControllerが
+BattleMapへ指示する。
+end note
+
+note right of BattlePresentationPort
+DOM・asset IDを含まない
+意味要求だけを渡す。
+Battleごとにabort可能。
+end note
+
+note right of AudioController
+BGMとWeb Audio graphを共有する。
+初回user gestureでunlockし、
+visibility changeでsuspend/resumeする。
+end note
+
+note right of BattleAudioSession
+Battle固有の一時音を所有する。
+dispose後は再生中音源を停止し、
+遅延decode完了後も再生しない。
+end note
+
+note right of StageEventManager
+Definition順のfixed-point連鎖。
+interruptMovementでは止めず、
+Battle terminal時だけ停止する。
+end note
+
+note bottom of SaveService
+decode -> migrate -> create Stage
+-> restore -> validate -> prepare
+-> 新session接続検証
+-> 成功後だけBattleを交換。
+Repairは正常fallbackと三世代guardを再検査する。
+v10専用namespaceのみを使用。
+end note
+
+note bottom of SaveRepository
+primary / temporary / backupを所有する。
+fallback昇格もlockと実データ比較を通し、
+途中失敗時は正常copyを最低1世代残す。
+end note
+
+note bottom of BattleSessionHost
+candidateはdetached DOMで接続検証する。
+表示rootへactivate後に旧sessionをdisposeし、
+新規開始またはLoad再開だけを実行する。
+end note
+
+note bottom of BattleController
+startNewBattleは初期化を行う。
+resumeLoadedBattleは保存済みphaseを再開し、
+PHASE_STARTやstatus減算を再実行しない。
+unexpected errorはFAULTEDで停止する。
+end note
+@enduml

@@ -305,14 +305,27 @@ button {
   overscroll-behavior-inline: contain;
 }
 
+.battle-board-shell {
+  position: relative;
+  width: max(100%, 22rem);
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(7, minmax(2.8rem, 1fr));
-  width: max(100%, 22rem);
+  width: 100%;
   overflow: hidden;
   border: 2px solid #74694f;
   border-radius: 0.55rem;
   background: #25231e;
+}
+
+.battle-effect-layer {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
 }
 
 .cell {
@@ -426,6 +439,473 @@ button {
 
 .unit-token.enemy {
   background: var(--enemy);
+}
+
+.battle-effect-unit {
+  position: absolute;
+  z-index: 16;
+  display: grid;
+  place-items: center;
+  border: 2px solid #f3eee2;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.battle-effect-unit-move {
+  animation: battle-unit-move 80ms linear both;
+}
+
+@keyframes battle-unit-move {
+  from {
+    transform: translate(
+      calc(-50% + var(--move-from-x)),
+      calc(-50% + var(--move-from-y))
+    );
+  }
+
+  to {
+    transform: translate(-50%, -50%);
+  }
+}
+
+.bow-shot-line {
+  position: absolute;
+  z-index: 24;
+  height: 3px;
+  border-radius: 999px;
+  background: #070605;
+  box-shadow: 0 0 1px #fff9, 0 1px 2px #000b;
+  transform-origin: left center;
+  pointer-events: none;
+  opacity: 0;
+  animation: bow-shot-travel 230ms linear forwards;
+}
+
+.bow-shot-line::after {
+  position: absolute;
+  top: 50%;
+  right: -4px;
+  width: 8px;
+  height: 5px;
+  background: #070605;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  content: "";
+  transform: translateY(-50%);
+}
+
+@keyframes bow-shot-travel {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) rotate(var(--bow-shot-angle)) translateX(0);
+  }
+
+  12% {
+    opacity: 1;
+    transform: translateY(-50%) rotate(var(--bow-shot-angle))
+      translateX(calc(var(--bow-shot-travel) * 0.08));
+  }
+
+  100% {
+    opacity: 0.92;
+    transform: translateY(-50%) rotate(var(--bow-shot-angle))
+      translateX(var(--bow-shot-travel));
+  }
+}
+
+.strategy-cast-cell-flash {
+  position: absolute;
+  z-index: 15;
+  background: #fff;
+  pointer-events: none;
+  opacity: 0;
+  animation: strategy-cast-cell-flash 140ms ease-in-out both;
+}
+
+@keyframes strategy-cast-cell-flash {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  45%,
+  55% {
+    opacity: 0.5;
+  }
+}
+
+.charge-dust-effect {
+  position: absolute;
+  z-index: 22;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.fire-tactic-burst-effect,
+.water-tactic-burst-effect {
+  position: absolute;
+  z-index: 23;
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  transform: translate(-50%, -50%);
+  -webkit-user-drag: none;
+}
+
+.fire-tactic-burst-effect {
+  filter: drop-shadow(0 0 9px rgb(255 92 0 / 0.58));
+}
+
+.water-tactic-burst-effect {
+  filter: drop-shadow(0 0 10px rgb(100 210 255 / 0.52));
+  animation: water-tactic-burst-pulse 960ms ease-out forwards;
+}
+
+@keyframes water-tactic-burst-pulse {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.78);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+
+  62% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+.wide-illusion-overlay {
+  position: absolute;
+  z-index: 14;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.wide-illusion-mist,
+.wide-illusion-skeleton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.wide-illusion-mist {
+  width: 132%;
+  height: 132%;
+  opacity: 0;
+  filter: drop-shadow(0 0 14px rgb(120 50 220 / 0.5));
+  animation: wide-illusion-mist 2.24s ease-out forwards;
+}
+
+.wide-illusion-skeleton {
+  width: 67.2%;
+  height: 67.2%;
+  opacity: 0;
+  filter: drop-shadow(0 0 16px rgb(92 32 184 / 0.42));
+  animation: wide-illusion-skeleton 2.24s ease-out forwards;
+}
+
+@keyframes wide-illusion-mist {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -38%) scale(0.42) rotate(0deg);
+  }
+
+  18% {
+    opacity: 0.95;
+  }
+
+  62% {
+    opacity: 0.96;
+    transform: translate(-50%, -44%) scale(1.02) rotate(9deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(1.14) rotate(16deg);
+  }
+}
+
+@keyframes wide-illusion-skeleton {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.36);
+  }
+
+  22% {
+    opacity: 0;
+  }
+
+  34% {
+    opacity: 0.92;
+    transform: translate(-50%, -54%) scale(0.82);
+  }
+
+  72% {
+    opacity: 0.96;
+    transform: translate(-50%, -56%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -60%) scale(1.08);
+  }
+}
+
+.normal-illusion-skull-effect,
+.confusion-symbol-effect {
+  position: absolute;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  -webkit-user-drag: none;
+}
+
+.normal-illusion-skull-effect {
+  z-index: 18;
+  filter: drop-shadow(0 0 7px rgb(103 35 190 / 0.58));
+  animation: normal-illusion-skull-fade 720ms ease-in-out both;
+}
+
+@keyframes normal-illusion-skull-fade {
+  0% {
+    opacity: 0;
+  }
+
+  24%,
+  62% {
+    opacity: 0.96;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.confusion-symbol-effect {
+  z-index: 19;
+  filter: drop-shadow(0 0 6px rgb(255 196 0 / 0.58));
+  animation: confusion-symbol-rise 720ms ease-out both;
+}
+
+@keyframes confusion-symbol-rise {
+  from {
+    transform: translate(-50%, -50%) translateY(0);
+  }
+
+  to {
+    transform: translate(-50%, -50%) translateY(var(--confusion-rise-distance));
+  }
+}
+
+.battle-effect-unit-flash {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.battle-effect-unit-hit {
+  animation-name: battle-unit-hit-flash;
+  animation-timing-function: linear;
+}
+
+.battle-effect-unit-confusion {
+  animation-name: battle-unit-confusion-flash;
+  animation-timing-function: ease-in-out;
+}
+
+.battle-effect-unit-illusion {
+  animation-name: battle-unit-illusion-flash;
+  animation-timing-function: ease-in-out;
+}
+
+.battle-effect-unit-fire {
+  animation-name: battle-unit-fire-flash;
+  animation-timing-function: ease-in-out;
+}
+
+.battle-effect-unit-water {
+  animation-name: battle-unit-water-flash;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes battle-unit-hit-flash {
+  0%,
+  3%,
+  26%,
+  51%,
+  76%,
+  100% {
+    opacity: 0;
+    filter: brightness(1) saturate(1);
+    transform: translate(-50%, -50%);
+  }
+
+  11%,
+  19%,
+  59%,
+  67% {
+    opacity: 0.98;
+    filter: brightness(0) saturate(100%) invert(100%) drop-shadow(0 0 9px #fff);
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes battle-unit-confusion-flash {
+  0%,
+  100% {
+    opacity: 0;
+    filter: brightness(0) saturate(100%) invert(88%) sepia(81%)
+      saturate(1690%) hue-rotate(347deg) brightness(107%) contrast(104%);
+    transform: translate(-50%, -50%);
+  }
+
+  50% {
+    opacity: 0.96;
+    filter: brightness(0) saturate(100%) invert(88%) sepia(81%)
+      saturate(1690%) hue-rotate(347deg) brightness(107%) contrast(104%)
+      drop-shadow(0 0 12px rgb(255 220 62 / 0.78));
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes battle-unit-illusion-flash {
+  0%,
+  100% {
+    opacity: 0;
+    filter: brightness(0) saturate(100%) invert(42%) sepia(95%)
+      saturate(2700%) hue-rotate(246deg) brightness(104%) contrast(108%);
+    transform: translate(-50%, -50%);
+  }
+
+  50% {
+    opacity: 0.96;
+    filter: brightness(0) saturate(100%) invert(42%) sepia(95%)
+      saturate(2700%) hue-rotate(246deg) brightness(104%) contrast(108%)
+      drop-shadow(0 0 12px rgb(151 62 238 / 0.82));
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes battle-unit-fire-flash {
+  0%,
+  100% {
+    opacity: 0;
+    filter: brightness(0) saturate(100%) invert(18%) sepia(97%)
+      saturate(6500%) hue-rotate(356deg) brightness(110%) contrast(118%);
+    transform: translate(-50%, -50%);
+  }
+
+  50% {
+    opacity: 0.96;
+    filter: brightness(0) saturate(100%) invert(18%) sepia(97%)
+      saturate(6500%) hue-rotate(356deg) brightness(110%) contrast(118%)
+      drop-shadow(0 0 12px rgb(230 35 22 / 0.84));
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes battle-unit-water-flash {
+  0%,
+  100% {
+    opacity: 0;
+    filter: brightness(0) saturate(100%) invert(78%) sepia(45%)
+      saturate(1760%) hue-rotate(151deg) brightness(109%) contrast(104%);
+    transform: translate(-50%, -50%);
+  }
+
+  50% {
+    opacity: 0.96;
+    filter: brightness(0) saturate(100%) invert(78%) sepia(45%)
+      saturate(1760%) hue-rotate(151deg) brightness(109%) contrast(104%)
+      drop-shadow(0 0 12px rgb(50 185 235 / 0.84));
+    transform: translate(-50%, -50%);
+  }
+}
+
+.damage-popup {
+  position: absolute;
+  z-index: 30;
+  min-width: 2.8rem;
+  color: #fff4c9;
+  font-family: "Arial Black", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  font-size: clamp(1.05rem, 4vw, 1.55rem);
+  font-weight: 1000;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  -webkit-text-stroke: 1px #4a130c;
+  text-shadow: 0 2px 0 #250704, 1px 0 0 #250704, -1px 0 0 #250704,
+    0 -1px 0 #250704, 0 0 4px rgb(255 214 116 / 0.65);
+  animation: damage-popup-bounce 780ms cubic-bezier(0.18, 0.82, 0.24, 1) both;
+}
+
+@keyframes damage-popup-bounce {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(8px) scale(0.42);
+  }
+
+  8.72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(1px) scale(1.28);
+  }
+
+  23.54% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-18px) scale(1);
+  }
+
+  39.23% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-6px) scale(1.07, 0.88);
+  }
+
+  48.82% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-13px) scale(0.98, 1.04);
+  }
+
+  58.41% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-6px) scale(1.03, 0.94);
+  }
+
+  66.26% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-10px) scale(0.99, 1.02);
+  }
+
+  74.1%,
+  80.21%,
+  93.03% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-6px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(-6px) scale(1);
+  }
 }
 
 .move-cost {

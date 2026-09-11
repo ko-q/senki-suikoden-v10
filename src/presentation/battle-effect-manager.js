@@ -68,9 +68,11 @@ function waitForDuration(duration, abortSignal) {
 export class BattleEffectManager {
   #renderer;
   #durations;
+  #durationOverrideTypes;
   #audioSession;
+  #visualSession;
 
-  constructor({ renderer, durations = {}, audioSession = null }) {
+  constructor({ renderer, durations = {}, audioSession = null, visualSession = null }) {
     invariant(renderer instanceof BattleRenderer, "BATTLE_EFFECT_RENDERER_REQUIRED");
     invariant(
       audioSession === null
@@ -81,9 +83,20 @@ export class BattleEffectManager {
         ),
       "BATTLE_EFFECT_AUDIO_SESSION_INVALID"
     );
+    invariant(
+      visualSession === null
+        || (
+          typeof visualSession === "object"
+          && typeof visualSession.present === "function"
+          && typeof visualSession.dispose === "function"
+        ),
+      "BATTLE_EFFECT_VISUAL_SESSION_INVALID"
+    );
     this.#renderer = renderer;
     this.#durations = normalizeDurations(durations);
+    this.#durationOverrideTypes = new Set(Object.keys(durations));
     this.#audioSession = audioSession;
+    this.#visualSession = visualSession;
   }
 
   async present(request, abortSignal) {
@@ -103,7 +116,18 @@ export class BattleEffectManager {
     }
     this.#renderer.renderPresentation(request);
     try {
-      await waitForDuration(this.#durations[request.type], abortSignal);
+      const visualHandled = this.#visualSession === null
+        ? false
+        : await this.#visualSession.present(
+          request,
+          abortSignal,
+          this.#durationOverrideTypes.has(request.type)
+            ? this.#durations[request.type]
+            : undefined
+        );
+      if (!visualHandled) {
+        await waitForDuration(this.#durations[request.type], abortSignal);
+      }
     } finally {
       if (audioHandle !== null && typeof audioHandle.complete === "function") {
         audioHandle.complete();
@@ -112,11 +136,15 @@ export class BattleEffectManager {
   }
 
   dispose() {
-    if (this.#audioSession === null) {
-      return;
+    if (this.#visualSession !== null) {
+      const visualSession = this.#visualSession;
+      this.#visualSession = null;
+      visualSession.dispose();
     }
-    const session = this.#audioSession;
-    this.#audioSession = null;
-    session.dispose();
+    if (this.#audioSession !== null) {
+      const audioSession = this.#audioSession;
+      this.#audioSession = null;
+      audioSession.dispose();
+    }
   }
 }

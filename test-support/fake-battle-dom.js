@@ -24,6 +24,12 @@ class FakeClassList {
   }
 }
 
+class FakeStyle {
+  setProperty(name, value) {
+    this[name] = value;
+  }
+}
+
 export class FakeElement {
   constructor({ selectorMap = null } = {}) {
     this.attributes = new Map();
@@ -34,10 +40,14 @@ export class FakeElement {
     this.disabled = false;
     this.hidden = false;
     this.listeners = new Map();
+    this.offsetHeight = 48;
+    this.offsetLeft = 0;
+    this.offsetTop = 0;
+    this.offsetWidth = 48;
     this.parentNode = null;
     this.removeCount = 0;
     this.selectorMap = selectorMap;
-    this.style = {};
+    this.style = new FakeStyle();
     this.textContent = "";
     this.type = "";
   }
@@ -68,6 +78,35 @@ export class FakeElement {
     this.children.push(...children);
   }
 
+  appendChild(child) {
+    this.append(child);
+    return child;
+  }
+
+  cloneNode(deep = false) {
+    const clone = new FakeElement();
+    clone.className = this.className;
+    clone.classList.add(...this.className.split(/\s+/).filter(Boolean));
+    for (const name of this.classList.values) {
+      clone.classList.add(name);
+    }
+    clone.dataset = { ...this.dataset };
+    clone.offsetHeight = this.offsetHeight;
+    clone.offsetLeft = this.offsetLeft;
+    clone.offsetTop = this.offsetTop;
+    clone.offsetWidth = this.offsetWidth;
+    clone.style = Object.assign(new FakeStyle(), this.style);
+    clone.textContent = this.textContent;
+    if (deep) {
+      clone.append(...this.children.map((child) => (
+        child !== null && typeof child.cloneNode === "function"
+          ? child.cloneNode(true)
+          : child
+      )));
+    }
+    return clone;
+  }
+
   replaceChildren(...children) {
     for (const child of this.children) {
       if (child !== null && typeof child === "object" && child.parentNode === this) {
@@ -93,7 +132,23 @@ export class FakeElement {
   }
 
   querySelector(selector) {
-    return this.selectorMap?.get(selector) ?? null;
+    const mapped = this.selectorMap?.get(selector) ?? null;
+    if (mapped !== null) {
+      return mapped;
+    }
+    if (selector.startsWith(".")) {
+      const className = selector.slice(1);
+      for (const child of this.children) {
+        if (child?.classList?.contains(className)) {
+          return child;
+        }
+        const descendant = child?.querySelector?.(selector) ?? null;
+        if (descendant !== null) {
+          return descendant;
+        }
+      }
+    }
+    return null;
   }
 
   setAttribute(name, value) {
@@ -128,6 +183,7 @@ export function createFakeBattleElements() {
     dialogueText: new FakeElement(),
     domainValue: new FakeElement(),
     endTurnButton: new FakeElement(),
+    effectLayer: new FakeElement(),
     eventText: new FakeElement(),
     fireButton: new FakeElement(),
     facingEastButton: new FakeElement(),

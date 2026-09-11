@@ -646,66 +646,79 @@ export class AudioController {
       return;
     }
     const withCry = descriptor.withCry === true;
+    const baseDelay = Number.isFinite(descriptor.delay) && descriptor.delay >= 0
+      ? descriptor.delay
+      : 0;
     if (descriptor.cueId === AudioCueId.MOVE_STEP) {
-      this.#playMove(sessionId, handle);
+      this.#playMove(sessionId, handle, baseDelay);
       return;
     }
     if (descriptor.cueId === AudioCueId.CONFUSION_CAST) {
-      this.#playStrategyCast(sessionId, handle);
+      this.#playStrategyCast(sessionId, handle, baseDelay);
       return;
     }
     if (descriptor.cueId === AudioCueId.ILLUSION_CAST) {
-      this.#playIllusionCast(sessionId, handle);
+      this.#playIllusionCast(sessionId, handle, baseDelay);
       return;
     }
     if (descriptor.cueId === AudioCueId.CONFIRM) {
-      this.#tone(sessionId, handle, 392, 0.08, "triangle", 0.22, 0);
-      this.#tone(sessionId, handle, 587.33, 0.12, "triangle", 0.22, 0.07);
+      this.#tone(sessionId, handle, 392, 0.08, "triangle", 0.22, baseDelay);
+      this.#tone(sessionId, handle, 587.33, 0.12, "triangle", 0.22, baseDelay + 0.07);
       return;
     }
     if (descriptor.cueId === AudioCueId.FAILURE) {
-      this.#tone(sessionId, handle, 293.66, 0.30, "sawtooth", 0.25, 0);
-      this.#tone(sessionId, handle, 220, 0.38, "sawtooth", 0.27, 0.19);
-      this.#tone(sessionId, handle, 146.83, 0.56, "sine", 0.32, 0.40);
+      this.#tone(sessionId, handle, 293.66, 0.30, "sawtooth", 0.25, baseDelay);
+      this.#tone(sessionId, handle, 220, 0.38, "sawtooth", 0.27, baseDelay + 0.19);
+      this.#tone(sessionId, handle, 146.83, 0.56, "sine", 0.32, baseDelay + 0.40);
       return;
     }
     if (descriptor.cueId === AudioCueId.NORMAL_ATTACK) {
       if (withCry) {
-        this.#playBattleCry(sessionId, handle);
+        this.#playBattleCry(sessionId, handle, baseDelay);
       }
       this.#playAsset(
         sessionId,
         handle,
         AudioAssetId.SWORD_CLASH,
-        { gain: 0.92, delay: withCry ? 0.18 : 0.025 }
+        { gain: 0.92, delay: baseDelay + (withCry ? 0.18 : 0.025) }
       );
       return;
     }
     if (descriptor.cueId === AudioCueId.PLAYER_BOW) {
-      this.#playAsset(sessionId, handle, AudioAssetId.PLAYER_BOW, { gain: 0.90 });
+      this.#playAsset(
+        sessionId,
+        handle,
+        AudioAssetId.PLAYER_BOW,
+        { gain: 0.90, delay: baseDelay }
+      );
       return;
     }
     if (descriptor.cueId === AudioCueId.ENEMY_BOW) {
-      this.#playAsset(sessionId, handle, AudioAssetId.ENEMY_BOW, { gain: 0.90 });
+      this.#playAsset(
+        sessionId,
+        handle,
+        AudioAssetId.ENEMY_BOW,
+        { gain: 0.90, delay: baseDelay }
+      );
       return;
     }
     if (descriptor.cueId === AudioCueId.CHARGE) {
       if (withCry) {
-        this.#playBattleCry(sessionId, handle);
+        this.#playBattleCry(sessionId, handle, baseDelay);
         this.#playAsset(
           sessionId,
           handle,
           AudioAssetId.CHARGE_RUMBLE,
-          { gain: 1, exclusiveKey: "charge_rumble" }
+          { gain: 1, delay: baseDelay, exclusiveKey: "charge_rumble" }
         );
       }
-      this.#tone(sessionId, handle, 92, 0.22, "sawtooth", 0.27, withCry ? 0.10 : 0.01);
-      this.#tone(sessionId, handle, 138, 0.18, "square", 0.16, withCry ? 0.14 : 0.07);
+      this.#tone(sessionId, handle, 92, 0.22, "sawtooth", 0.27, baseDelay + (withCry ? 0.10 : 0.01));
+      this.#tone(sessionId, handle, 138, 0.18, "square", 0.16, baseDelay + (withCry ? 0.14 : 0.07));
       this.#playAsset(
         sessionId,
         handle,
         AudioAssetId.SWORD_CLASH,
-        { gain: 0.92, delay: withCry ? 0.20 : 0.16 }
+        { gain: 0.92, delay: baseDelay + (withCry ? 0.20 : 0.16) }
       );
       return;
     }
@@ -762,7 +775,10 @@ export class AudioController {
     if (spec.duckDuration !== undefined) {
       this.#duckTheme(spec.duckDuration);
     }
-    this.#playAsset(sessionId, handle, spec.assetId, spec);
+    this.#playAsset(sessionId, handle, spec.assetId, {
+      ...spec,
+      delay: baseDelay + (spec.delay ?? 0)
+    });
   }
 
   async #playAsset(sessionId, handle, assetId, {
@@ -811,11 +827,11 @@ export class AudioController {
     }
   }
 
-  #playMove(sessionId, handle) {
+  #playMove(sessionId, handle, delay = 0) {
     if (this.#context === null) {
       return;
     }
-    const time = this.#context.currentTime;
+    const time = this.#context.currentTime + delay;
     const variation = this.#footstepIndex % 3;
     this.#footstepIndex += 1;
     this.#duckTheme(0.12);
@@ -851,11 +867,11 @@ export class AudioController {
     this.#startSessionSource(sessionId, handle, body, time, time + 0.09);
   }
 
-  #playStrategyCast(sessionId, handle) {
+  #playStrategyCast(sessionId, handle, delay = 0) {
     if (this.#context === null) {
       return;
     }
-    const time = this.#context.currentTime;
+    const time = this.#context.currentTime + delay;
     this.#duckTheme(1.05);
     const sweep = this.#context.createOscillator();
     const filter = this.#context.createBiquadFilter();
@@ -874,15 +890,15 @@ export class AudioController {
     gainNode.connect(this.#se);
     this.#startSessionSource(sessionId, handle, sweep, time, time + 0.90);
     [392, 329.63, 261.63, 196].forEach((frequency, index) => {
-      this.#tone(sessionId, handle, frequency, 0.32, "triangle", 0.17, index * 0.085);
+      this.#tone(sessionId, handle, frequency, 0.32, "triangle", 0.17, delay + index * 0.085);
     });
   }
 
-  #playIllusionCast(sessionId, handle) {
+  #playIllusionCast(sessionId, handle, delay = 0) {
     if (this.#context === null) {
       return;
     }
-    const time = this.#context.currentTime;
+    const time = this.#context.currentTime + delay;
     this.#duckTheme(1.35);
     const bus = this.#context.createGain();
     const filter = this.#context.createBiquadFilter();
@@ -926,16 +942,16 @@ export class AudioController {
     breathFilter.connect(breathGain);
     breathGain.connect(this.#se);
     this.#startSessionSource(sessionId, handle, breath, time);
-    this.#tone(sessionId, handle, 1046.50, 0.55, "sine", 0.14, 0.10);
-    this.#tone(sessionId, handle, 783.99, 0.70, "sine", 0.12, 0.27);
-    this.#tone(sessionId, handle, 523.25, 0.86, "sine", 0.11, 0.43);
+    this.#tone(sessionId, handle, 1046.50, 0.55, "sine", 0.14, delay + 0.10);
+    this.#tone(sessionId, handle, 783.99, 0.70, "sine", 0.12, delay + 0.27);
+    this.#tone(sessionId, handle, 523.25, 0.86, "sine", 0.11, delay + 0.43);
   }
 
-  #playBattleCry(sessionId, handle) {
+  #playBattleCry(sessionId, handle, delay = 0) {
     if (this.#context === null) {
       return;
     }
-    const time = this.#context.currentTime;
+    const time = this.#context.currentTime + delay;
     this.#vocalSyllable(sessionId, handle, time, 195, 150, 0.22, [520, 1850, 2850]);
     this.#vocalSyllable(sessionId, handle, time + 0.20, 165, 112, 0.34, [820, 1250, 2650]);
     const source = this.#context.createBufferSource();

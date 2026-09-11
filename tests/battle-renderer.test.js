@@ -133,9 +133,21 @@ test("BattleEffectManager completes and disposes its Battle-owned audio session"
         this.disposed += 1;
       }
     };
+    const visualRecording = {
+      disposed: 0,
+      requests: [],
+      async present(request, abortSignal, durationOverride) {
+        this.requests.push({ request, abortSignal, durationOverride });
+        return true;
+      },
+      dispose() {
+        this.disposed += 1;
+      }
+    };
     const manager = new BattleEffectManager({
       renderer,
       audioSession: recording,
+      visualSession: visualRecording,
       durations: { [PresentationRequestType.MOVE]: 0 }
     });
     const request = createSemanticPresentationRequest(
@@ -149,6 +161,10 @@ test("BattleEffectManager completes and disposes its Battle-owned audio session"
     assert.deepEqual(recording.requests, [request]);
     assert.equal(recording.completed, 1);
     assert.equal(recording.disposed, 1);
+    assert.equal(visualRecording.requests.length, 1);
+    assert.equal(visualRecording.requests[0].request, request);
+    assert.equal(visualRecording.requests[0].durationOverride, 0);
+    assert.equal(visualRecording.disposed, 1);
   } finally {
     restoreDocument();
   }

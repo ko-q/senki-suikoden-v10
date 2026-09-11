@@ -30,6 +30,7 @@ const REQUIRED_ELEMENT_KEYS = Object.freeze([
   "dialogueText",
   "domainValue",
   "endTurnButton",
+  "effectLayer",
   "eventText",
   "fireButton",
   "facingEastButton",
@@ -290,6 +291,8 @@ export class BattleRenderer {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "cell";
+        button.dataset.x = String(x);
+        button.dataset.y = String(y);
         button.dataset.terrain = cell.terrain.id;
         button.disabled = viewState.inputLocked;
         button.setAttribute("role", "gridcell");
@@ -341,6 +344,7 @@ export class BattleRenderer {
     const token = document.createElement("span");
     const affiliation = stage.armyManager.getAffiliation(unit);
     token.className = `unit-token ${affiliation === Affiliation.PLAYER ? "player" : "enemy"}`;
+    token.dataset.unitId = unit.id;
     if (unit.actionState === UnitActionState.FINISHED) {
       token.classList.add("is-finished");
     }

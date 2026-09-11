@@ -1,7 +1,7 @@
 # 戦旗水滸伝 v10
 
 現行v9を残したまま、別Repository・別URLで段階試験するOO再設計版です。
-この成果物はMilestone 11であり、ゲーム全章の完成版ではありません。
+この成果物はMilestone 12であり、ゲーム全章の完成版ではありません。
 
 ## 現在動くもの
 
@@ -20,6 +20,10 @@
 - 初回操作での音声解錠、ON／OFF、visibility停止・再開
 - Battle単位の一時音所有と、破棄後の遅延decode再生防止
 - 章番号による戦闘BGM、勝利BGM、敗北BGMの切替
+- v9.7.75と同一byteの戦闘画像素材8点
+- Battle専用overlayによる移動、弓、突撃、計略、状態、被害の画像演出
+- v9の演出時間と広域幻術SE開始時刻の同期
+- 再描画をまたぐ突撃砂煙と、Battle破棄時の演出一括cancel
 - イントロ会話、部隊選択、移動Preview、全Action、待機・方向確定、Player phase終了の操作経路
 - 弓撃／投擲、突撃、撹乱Lv1〜3、幻術、広域幻術、火計、水計の選択・対象指定UI
 - Preview先を基準とするAction候補・対象highlightと、無効target選択時のmode保持
@@ -73,7 +77,9 @@
 ## まだ入れていないもの
 
 - 正式人物データ（正本Excel第4.7版が必要）
-- 正式な画像と画像演出の同期
+- 正式人物portraitとAction cut-in
+- 正式Stage map画像
+- title／勝利／敗北の専用画面画像
 - 正式Stage
 
 未実装機能を仮のgame ruleで埋めず、後続milestoneでv9.7.75実ファイルと正本を
@@ -94,6 +100,9 @@ Save／Load／Repair／削除できます。Load時は新しいBattle一式をde
 
 音声はブラウザの自動再生制限に合わせ、画面右上の`Sound: Start`または最初の画面操作で
 解錠します。解錠後は同じbuttonでON／OFFを切り替えられます。
+
+戦闘画像演出は盤面DOMとは別のBattle専用overlayに表示します。盤面再描画をまたいで残る
+突撃砂煙を含め、Loadや新規開始で旧Battleを破棄した時点ですべて停止・除去します。
 
 ## ローカル確認
 

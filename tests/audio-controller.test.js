@@ -87,6 +87,32 @@ test("a Battle audio session owns and stops its transient sources", async () => 
   runtime.controller.dispose();
 });
 
+test("wide illusion schedules its start cue and cast cue at the v9 visual boundaries", async () => {
+  const runtime = createController();
+  await runtime.controller.unlock();
+  await flushAudioTasks();
+  const session = runtime.controller.createBattleSession();
+  const request = createSemanticPresentationRequest(PresentationRequestType.ACTION, {
+    actionType: ActionType.WIDE_ILLUSION,
+    actorId: "enemy",
+    targetId: "enemy",
+    actorAffiliation: Affiliation.ENEMY,
+    actorIsMob: false,
+    forced: false
+  });
+  const handle = session.present(request, new AbortController().signal);
+  await flushAudioTasks();
+  handle.complete();
+
+  const startTimes = runtime.context.startedSources
+    .map((source) => source.started[0]?.[0])
+    .filter((time) => Number.isFinite(time));
+  assert.equal(startTimes.some((time) => Math.abs(time - 2.3) < 0.000001), true);
+  assert.equal(startTimes.some((time) => Math.abs(time - 4.24) < 0.000001), true);
+  session.dispose();
+  runtime.controller.dispose();
+});
+
 test("a disposed Battle never plays a cue after its deferred decode finishes", async () => {
   const context = new FakeAudioContext({ deferredDecode: true });
   const runtime = createController(context);

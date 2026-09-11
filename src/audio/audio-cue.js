@@ -71,8 +71,8 @@ function actionCues(payload) {
   }
   if (payload.actionType === ActionType.WIDE_ILLUSION) {
     return [
-      cue(AudioCueId.WIDE_ILLUSION_START),
-      cue(AudioCueId.ILLUSION_CAST)
+      cue(AudioCueId.WIDE_ILLUSION_START, { delay: 0.3 }),
+      cue(AudioCueId.ILLUSION_CAST, { delay: 2.24 })
     ];
   }
   if (payload.actionType === ActionType.FIRE) {

@@ -22,7 +22,7 @@
             aria-pressed="false"
           >Sound: Start</button>
         </div>
-        <p class="subtitle">OO battle, resilient saves, and v9 audio</p>
+        <p class="subtitle">OO battle, resilient saves, and v9 audiovisual effects</p>
       </header>
 
       <section class="persistence-card" aria-labelledby="persistenceTitle">
@@ -92,7 +92,10 @@
             <p id="selectedUnitText" class="unit-summary">No unit selected.</p>
             <p id="eventText" class="event-text" data-tone="info">Battle setup.</p>
             <div class="board-scroll">
-              <div id="board" class="board" role="grid" aria-label="Development battle map"></div>
+              <div class="battle-board-shell">
+                <div id="board" class="board" role="grid" aria-label="Development battle map"></div>
+                <div id="effectLayer" class="battle-effect-layer" aria-hidden="true"></div>
+              </div>
             </div>
             <div id="actionPanel" class="command-toolbar" aria-label="Battle commands" hidden>
               <button id="bowButton" class="primary-button" type="button" disabled>Projectile</button>
@@ -139,10 +142,11 @@
       </template>
 
       <section class="scope-card">
-        <h2>Milestone 11 scope</h2>
+        <h2>Milestone 12 scope</h2>
         <p>
           This page provides twenty manual save slots, explicit fallback repair, recovery
-          choice, transactional BattleSession replacement, and v9-compatible battle audio.
+          choice, transactional BattleSession replacement, v9-compatible battle audio,
+          and Battle-owned visual effects.
           It remains a development fixture and contains no canonical character data.
         </p>
       </section>

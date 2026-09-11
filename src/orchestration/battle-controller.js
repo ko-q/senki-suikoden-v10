@@ -454,6 +454,7 @@ export class BattleController {
         {
           reason: "PHASE_START",
           unitId: unit.id,
+          position: positionPayload(this.#stage.map.getPosition(unit)),
           statusResult,
           statusEffects: statusEffectsPayload(unit)
         }
@@ -863,8 +864,10 @@ export class BattleController {
         !== JSON.stringify(entry.statusEffects.after))
       .map((entry) => ({
         unitId: (entry.unit ?? entry.target).id,
+        position: positionPayload(entry.position ?? entry.targetPosition),
         before: entry.statusEffects.before,
-        after: entry.statusEffects.after
+        after: entry.statusEffects.after,
+        effectTurns: entry.effectTurns ?? (entry.confusion?.success === true ? 1 : null)
       }));
     if (statusEntries.length > 0) {
       await this.#present(createSemanticPresentationRequest(
@@ -912,6 +915,7 @@ export class BattleController {
         {
           reason: "TRAP",
           unitId: result.unit.id,
+          position: positionPayload(result.trap.position),
           statusChange: result.statusChange
         }
       ));

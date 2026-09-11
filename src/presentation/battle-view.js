@@ -14,6 +14,7 @@ export const BATTLE_VIEW_ELEMENT_IDS = Object.freeze({
   dialogueText: "dialogueText",
   domainValue: "domainValue",
   endTurnButton: "endTurnButton",
+  effectLayer: "effectLayer",
   eventText: "eventText",
   fireButton: "fireButton",
   facingEastButton: "facingEastButton",

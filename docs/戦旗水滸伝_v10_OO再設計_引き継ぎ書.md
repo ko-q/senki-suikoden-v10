@@ -1367,6 +1367,11 @@ stable checkpointはv10 recovery slotへ自動保存される。Load候補は旧
 接続検証し、activate成功後だけ旧sessionをdisposeする。Milestone 11ではv9と同一byteの
 音声20点、AudioController、意味要求からのcue mapping、BGM lifecycle、音声unlock／toggle、
 visibility停止・再開、Battle単位の一時音cancelを実装した。後続実装を妨げる未決定事項はない。
+Milestone 12ではv9と同一byteの戦闘演出画像8点を分離し、BattleVisualEffectSession、
+盤面と独立したeffect layer、移動・弓・突撃・計略・状態変化・被害表示を接続した。
+継続中の突撃砂煙は盤面再描画に巻き込まれず、Load／新規開始／disposeでは旧Battleの
+演出DOMとtimerを一括破棄する。広域幻術は霧開始から300ms後に専用SE、2240ms後に
+幻術cast音と範囲flashへ進むv9順序に合わせた。Save形式、戦闘式、AI、Domain RNGは変更していない。
 
 次は設計未決ではなく、実装時に正本から転記・照合する項目である。
 
@@ -1374,19 +1379,20 @@ visibility停止・再開、Battle単位の一時音cancelを実装した。後�
 - 個別AIの優先順位と確率。
 - 増援cellの厳密な走査順。
 - Trap回避とSpell trap免疫の能力ID。
-- 既存画像と画像演出のmapping・同期時間。
+- 正式人物portrait、Action cut-in、Stage map、title／結果画面のmapping・同期時間。
 - 人物能力、技能、性格。
 
 ## 36. 次に行うこと
 
-統合レビューとMilestone 11までは完了済み。20枠のSave UI、fallback Repair、既存音声の
-分離実装まで完了したため、
+統合レビューとMilestone 12までは完了済み。20枠のSave UI、fallback Repair、既存音声、
+戦闘画像演出の分離実装まで完了したため、
 実装順11以降を進める。
 
 ```text
-1 既存画像と画像演出のmapping・音声との同期
-2 正式人物データ入手後に正式Stageを順次移植
-3 v9との回帰比較
+1 title／勝利／敗北の専用画面と結果演出
+2 正式人物データ入手後にportrait／Action cut-inと正式Stageを順次移植
+3 Stage map画像を正式Stageへ接続
+4 v9との回帰比較
 ```
 
 以後、新しい設計問題は `問題 / 影響 / 修正案` で提示する。承認のないゲーム実装、v9変更、ゲームバランス変更、AI性能変更は行わない。

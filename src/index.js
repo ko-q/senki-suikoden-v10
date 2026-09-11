@@ -109,6 +109,16 @@ export { BattleEffectManager } from "./presentation/battle-effect-manager.js";
 export { BattleRenderer } from "./presentation/battle-renderer.js";
 export { BattleScreen, InteractionMode } from "./presentation/battle-screen.js";
 export {
+  BattleVisualAssetId,
+  DEFAULT_BATTLE_VISUAL_ASSET_URLS,
+  V9_BATTLE_VISUAL_ASSET_MANIFEST,
+  requireBattleVisualAssetCatalog
+} from "./presentation/battle-visual-assets.js";
+export {
+  BattleVisualEffectSession,
+  V9_BATTLE_VISUAL_TIMING
+} from "./presentation/battle-visual-effects.js";
+export {
   BATTLE_VIEW_ELEMENT_IDS,
   BattleView,
   BattleViewFactory

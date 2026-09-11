@@ -52,6 +52,11 @@ test("tactic cast, damage and status requests map independently", () => {
     AudioCueId.WIDE_ILLUSION_START,
     AudioCueId.ILLUSION_CAST
   ]);
+  assert.deepEqual(
+    audioCuesForPresentation(actionRequest(ActionType.WIDE_ILLUSION))
+      .map((descriptor) => descriptor.delay),
+    [0.3, 2.24]
+  );
   assert.deepEqual(cueIds(createSemanticPresentationRequest(
     PresentationRequestType.DAMAGE,
     { operationType: ActionType.FIRE, entries: [] }

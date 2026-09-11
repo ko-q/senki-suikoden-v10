@@ -31,6 +31,8 @@ package Presentation {
   class BattleScreen
   class BattleRenderer
   class BattleEffectManager
+  class BattleVisualEffectSession
+  class BattleVisualAssetCatalog
   class DialogueController
   class BattleView
   class BattleViewFactory
@@ -133,7 +135,10 @@ BattleController --> BattleCheckpointPort : stable snapshot
 BattleScreen *-- BattleRenderer
 BattleScreen *-- BattleEffectManager
 BattleScreen *-- DialogueController
+BattleEffectManager *-- BattleVisualEffectSession
 BattleEffectManager *-- BattleAudioSession
+BattleVisualEffectSession --> BattleVisualAssetCatalog
+BattleVisualEffectSession --> Stage : read-only layout
 BattleAudioSession --> AudioController
 AudioController --> AudioAssetCatalog
 AudioController --> AudioCueMapper
@@ -241,6 +246,12 @@ note right of BattleAudioSession
 Battle固有の一時音を所有する。
 dispose後は再生中音源を停止し、
 遅延decode完了後も再生しない。
+end note
+
+note right of BattleVisualEffectSession
+盤面と分離したBattle専用overlayを所有する。
+意味要求だけから画像演出へ写像し、
+Abort／disposeでDOMとtimerを全除去する。
 end note
 
 note right of StageEventManager

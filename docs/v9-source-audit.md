@@ -226,3 +226,24 @@ v9はrecovery読込時にfallbackを自動昇格し、手動slot読込ではfall
 PresentationRequestは音源file名やasset IDを含まず、既存の意味情報だけからPresentation層で
 cueへ変換する。Save format、content revision、storage prefix、戦闘式、AI、人物値、
 BattleRandomの消費順は変更していない。v9の追跡対象ファイルも変更していない。
+
+## Milestone 12で照合した範囲
+
+基準commitの`battle-effect-assets.js`にある8個のWebP Data URL、`game.js`の
+`BATTLE_EFFECT_TIMING`、各Action・damage・statusの呼出順、`index.html`の演出CSSを
+直接確認した。
+
+次をv10へ責務分離して実装した。
+
+- 8個のData URLを個別WebP fileへ復号し、byte数とSHA-256がv9と一致することをtestで固定。
+- 盤面再描画とは独立したBattle専用effect layerと`BattleVisualEffectSession`。
+- 80msの1cell移動、味方／敵別の4本弓軌道、突撃砂煙と160／200msのimpact時機。
+- 火計・水計の中心burst、計略範囲flash、広域幻術の7×7 overlay。
+- 撹乱の1ターン「？」／2ターン「！」、通常幻術のドクロ、状態別Unit発光。
+- 480msのUnit発光、780msのdamage popupと、2ターン成功時の2回発光。
+- Abort／dispose時の演出DOM、待機timer、継続中砂煙の一括破棄。
+- 広域幻術開始から0.3秒後の専用SEと、2.24秒後の幻術cast音。
+
+PresentationRequestには画像file名やasset IDを追加せず、座標・Action種別・状態差分だけから
+Presentation層で演出へ写像する。Save format、content revision、storage prefix、戦闘式、
+AI、人物値、BattleRandomの消費順は変更していない。v9の追跡対象ファイルも変更していない。

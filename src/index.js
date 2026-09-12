@@ -106,6 +106,10 @@ export { SaveCodec, SaveKind } from "./persistence/save-codec.js";
 export { MigrationCatalog, SaveMigrator } from "./persistence/save-migrator.js";
 export { SaveRepository } from "./persistence/save-repository.js";
 export { BattleEffectManager } from "./presentation/battle-effect-manager.js";
+export {
+  BattleResultEffectSession,
+  V9_BATTLE_RESULT_TIMING
+} from "./presentation/battle-result-effects.js";
 export { BattleRenderer } from "./presentation/battle-renderer.js";
 export { BattleScreen, InteractionMode } from "./presentation/battle-screen.js";
 export {
@@ -124,11 +128,19 @@ export {
   BattleViewFactory
 } from "./presentation/battle-view.js";
 export { DialogueController } from "./presentation/dialogue-controller.js";
+export { GameResultPanel } from "./presentation/game-result-panel.js";
 export {
   DEFAULT_MANUAL_SLOT_IDS,
   MANUAL_SAVE_SLOT_COUNT,
   PersistencePanel
 } from "./presentation/persistence-panel.js";
+export {
+  DEFAULT_SCREEN_VISUAL_ASSET_URLS,
+  ScreenVisualAssetId,
+  V9_SCREEN_VISUAL_ASSET_MANIFEST,
+  requireScreenVisualAssetCatalog
+} from "./presentation/screen-visual-assets.js";
+export { TitleScreen, V9_TITLE_SCREEN_TIMING } from "./presentation/title-screen.js";
 export {
   AIService,
   EnemyTurnPlanKind,

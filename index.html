@@ -4,10 +4,50 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#191814">
-    <title>Senki Suikoden v10 Foundation</title>
+    <title>Senki Suikoden v10</title>
     <link rel="stylesheet" href="./styles/main.css">
   </head>
   <body>
+    <section
+      id="titleScreen"
+      class="title-screen active"
+      role="button"
+      tabindex="0"
+      aria-label="Title opening. Tap or press Enter to begin."
+      aria-hidden="false"
+    >
+      <div id="titleBackground" class="title-bg" aria-hidden="true"></div>
+      <div class="title-vignette" aria-hidden="true"></div>
+      <div class="title-logo-layer">
+        <img id="titleLogo" class="title-logo" alt="Senki Suikoden">
+      </div>
+      <div class="title-whiteout" aria-hidden="true"></div>
+      <div class="title-lightning left" aria-hidden="true">
+        <svg viewBox="0 0 180 380" xmlns="http://www.w3.org/2000/svg">
+          <path class="bolt-glow" d="M102 4 C99 24 86 44 92 64 C97 79 119 80 110 102 C98 127 108 143 95 165 C81 188 89 201 78 226 C69 247 76 265 63 292 C56 307 59 332 50 360"></path>
+          <path class="bolt-main" d="M102 4 C99 24 86 44 92 64 C97 79 119 80 110 102 C98 127 108 143 95 165 C81 188 89 201 78 226 C69 247 76 265 63 292 C56 307 59 332 50 360"></path>
+          <path class="bolt-branch" d="M96 112 C76 133 78 149 62 172"></path>
+          <path class="bolt-branch" d="M81 228 C100 251 101 269 87 296"></path>
+        </svg>
+      </div>
+      <div class="title-lightning right" aria-hidden="true">
+        <svg viewBox="0 0 180 380" xmlns="http://www.w3.org/2000/svg">
+          <path class="bolt-glow" d="M104 6 C99 28 87 50 93 70 C97 86 121 89 111 112 C100 137 109 149 96 171 C84 191 91 205 80 230 C70 252 77 270 65 298 C59 312 63 336 55 364"></path>
+          <path class="bolt-main" d="M104 6 C99 28 87 50 93 70 C97 86 121 89 111 112 C100 137 109 149 96 171 C84 191 91 205 80 230 C70 252 77 270 65 298 C59 312 63 336 55 364"></path>
+          <path class="bolt-branch" d="M98 118 C116 140 116 155 130 176"></path>
+          <path class="bolt-branch" d="M82 234 C64 257 62 276 48 301"></path>
+        </svg>
+      </div>
+      <div class="title-meta">SENKI SUIKODEN / 戦旗水滸伝 / v10 TEST BUILD</div>
+      <div class="title-license">
+        Based on the classic novel “Shuihu Zhuan” / Tactical Story Prototype
+        <span class="right-note">© 2026 Ochi-made Prototype</span>
+      </div>
+      <div id="titlePrompt" class="title-prompt" aria-hidden="true">
+        TAP HERE TO START<span class="sub">Touch Here to Start</span>
+      </div>
+    </section>
+
     <main class="app-shell">
       <header class="hero">
         <div class="hero-heading">
@@ -138,19 +178,37 @@
               <button id="dialogueNextButton" class="primary-button" type="button">Next</button>
             </div>
           </section>
+          <section
+            id="resultEffectLayer"
+            class="battle-result-effect-host"
+            aria-hidden="true"
+            hidden
+          ></section>
         </div>
       </template>
 
       <section class="scope-card">
-        <h2>Milestone 12 scope</h2>
+        <h2>Milestone 13 scope</h2>
         <p>
           This page provides twenty manual save slots, explicit fallback repair, recovery
           choice, transactional BattleSession replacement, v9-compatible battle audio,
-          and Battle-owned visual effects.
+          Battle-owned visual effects, and v9-compatible title and result sequences.
           It remains a development fixture and contains no canonical character data.
         </p>
       </section>
     </main>
+
+    <section id="resultOverlay" class="game-result-overlay" aria-hidden="true" hidden>
+      <div class="game-result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+        <p class="eyebrow">Battle result</p>
+        <h2 id="resultTitle">Result</h2>
+        <p id="resultMessage" class="game-result-message"></p>
+        <p id="resultDetails" class="game-result-details"></p>
+        <button id="resultNewBattleButton" class="primary-button" type="button">
+          New development battle
+        </button>
+      </div>
+    </section>
 
     <section id="recoveryOverlay" class="recovery-overlay" aria-hidden="true" hidden>
       <div class="recovery-card" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">

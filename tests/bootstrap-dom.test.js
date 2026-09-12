@@ -5,6 +5,8 @@ import { SAVE_STORAGE_PREFIX } from "../src/config/version.js";
 import {
   FakeElement,
   createFakeBattleViewTemplate,
+  createFakeGameResultElements,
+  createFakeTitleElements,
   createFakePersistenceElements
 } from "../test-support/fake-battle-dom.js";
 import { MemoryStorage } from "../test-support/memory-storage.js";
@@ -14,7 +16,7 @@ import {
 } from "../test-support/fake-audio.js";
 
 async function waitUntil(predicate, label) {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  for (let attempt = 0; attempt < 1800; attempt += 1) {
     if (predicate()) {
       return;
     }
@@ -27,10 +29,21 @@ test("bootstrap starts, saves manually, and swaps the Battle DOM without touchin
   const { template, createdViews } = createFakeBattleViewTemplate();
   const battleHost = new FakeElement();
   const persistence = createFakePersistenceElements();
+  const result = createFakeGameResultElements();
+  const title = createFakeTitleElements();
   const elementsBySelector = new Map([
     ["#battleHost", battleHost],
     ["#battleViewTemplate", template],
-    ...Object.entries(persistence).map(([key, element]) => [`#${key}`, element])
+    ...Object.entries(persistence).map(([key, element]) => [`#${key}`, element]),
+    ["#resultDetails", result.details],
+    ["#resultMessage", result.message],
+    ["#resultNewBattleButton", result.newBattleButton],
+    ["#resultOverlay", result.overlay],
+    ["#resultTitle", result.title],
+    ["#titleBackground", title.background],
+    ["#titleLogo", title.logo],
+    ["#titlePrompt", title.prompt],
+    ["#titleScreen", title.root]
   ]);
   const previousDocument = globalThis.document;
   const previousLocalStorage = globalThis.localStorage;
@@ -53,6 +66,13 @@ test("bootstrap starts, saves manually, and swaps the Battle DOM without touchin
 
   try {
     await import(`../src/app/bootstrap.js?dom-test=${Date.now()}`);
+    assert.equal(createdViews.length, 0);
+    assert.equal(title.root.hidden, false);
+    title.root.dispatch("click");
+    await waitUntil(() => title.root.classList.has("intro"), "TITLE_INTRO");
+    await waitUntil(() => title.root.classList.has("ready"), "TITLE_READY");
+    title.root.dispatch("click");
+    await waitUntil(() => createdViews.length === 1, "TITLE_CLOSED");
     assert.equal(createdViews.length, 1);
     const firstView = createdViews[0];
     const { elements } = firstView;
@@ -61,13 +81,14 @@ test("bootstrap starts, saves manually, and swaps the Battle DOM without touchin
     assert.equal(elements.modeValue.textContent, "LOCKED");
     assert.equal(elements.dialogueOverlay.hidden, false);
     assert.equal(persistence.manualSlotList.children.length, 20);
-    assert.equal(persistence.audioButton.textContent, "Sound: Start");
+    assert.equal(title.root.hidden, true);
+    assert.equal(persistence.audioButton.textContent, "Sound: ON");
 
     persistence.audioButton.dispatch("click");
-    await waitUntil(
-      () => persistence.audioButton.textContent === "Sound: ON",
-      "AUDIO_UNLOCKED"
-    );
+    assert.equal(persistence.audioButton.textContent, "Sound: OFF");
+    assert.equal(persistence.audioButton.attributes.get("aria-pressed"), "false");
+    persistence.audioButton.dispatch("click");
+    assert.equal(persistence.audioButton.textContent, "Sound: ON");
     assert.equal(persistence.audioButton.attributes.get("aria-pressed"), "true");
 
     elements.dialogueNextButton.dispatch("click");

@@ -15,7 +15,7 @@ import {
 
 test("Battle Port contracts accept structural adapters and reject missing methods", () => {
   const presentationPort = { present() {} };
-  const checkpointPort = { requestRecoverySave() {} };
+  const checkpointPort = { requestRecoverySave() {}, requestRecoveryClear() {} };
 
   assert.equal(requireBattlePresentationPort(presentationPort), presentationPort);
   assert.equal(requireBattleCheckpointPort(checkpointPort), checkpointPort);
@@ -26,6 +26,10 @@ test("Battle Port contracts accept structural adapters and reject missing method
   assert.throws(
     () => requireBattleCheckpointPort({}),
     { code: "BATTLE_CHECKPOINT_METHOD_REQUIRED" }
+  );
+  assert.throws(
+    () => requireBattleCheckpointPort({ requestRecoverySave() {} }),
+    { code: "BATTLE_CHECKPOINT_CLEAR_METHOD_REQUIRED" }
   );
 });
 
@@ -75,6 +79,7 @@ test("NullBattleCheckpointPort accepts an immutable data snapshot", () => {
   const snapshot = Object.freeze({ stageId: "stage_a" });
 
   assert.equal(port.requestRecoverySave(snapshot), undefined);
+  assert.equal(port.requestRecoveryClear(), undefined);
   assert.throws(
     () => port.requestRecoverySave(null),
     { code: "BATTLE_SNAPSHOT_REQUIRED" }

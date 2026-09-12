@@ -314,6 +314,181 @@ export class AudioController {
     return this.setEnabled(!this.#enabled);
   }
 
+  playTitleThunder() {
+    if (!this.#enabled || this.#context === null || this.#backgroundSuspended) {
+      return false;
+    }
+
+    const time = this.#context.currentTime + 0.04;
+    const duration = 3.25;
+    const thunderBus = this.#context.createGain();
+    const thunderBody = this.#context.createBiquadFilter();
+    const thunderPresence = this.#context.createBiquadFilter();
+    thunderBus.gain.value = 2.85;
+    thunderBody.type = "peaking";
+    thunderBody.frequency.value = 250;
+    thunderBody.Q.value = 0.72;
+    thunderBody.gain.value = 11;
+    thunderPresence.type = "peaking";
+    thunderPresence.frequency.value = 760;
+    thunderPresence.Q.value = 0.62;
+    thunderPresence.gain.value = 6;
+    thunderBus.connect(thunderBody);
+    thunderBody.connect(thunderPresence);
+    thunderPresence.connect(this.#master);
+
+    const cloud = this.#context.createBufferSource();
+    const cloudLow = this.#context.createBiquadFilter();
+    const cloudMid = this.#context.createBiquadFilter();
+    const cloudGain = this.#context.createGain();
+    cloud.buffer = this.#noiseBuffer(duration);
+    cloudLow.type = "lowpass";
+    cloudLow.frequency.setValueAtTime(1450, time);
+    cloudLow.frequency.exponentialRampToValueAtTime(190, time + duration);
+    cloudMid.type = "peaking";
+    cloudMid.frequency.value = 285;
+    cloudMid.Q.value = 0.78;
+    cloudMid.gain.value = 12;
+    cloudGain.gain.setValueAtTime(0.0001, time);
+    cloudGain.gain.linearRampToValueAtTime(0.34, time + 0.14);
+    cloudGain.gain.linearRampToValueAtTime(0.18, time + 0.34);
+    cloudGain.gain.linearRampToValueAtTime(0.52, time + 0.56);
+    cloudGain.gain.linearRampToValueAtTime(0.24, time + 0.82);
+    cloudGain.gain.linearRampToValueAtTime(0.70, time + 1.06);
+    cloudGain.gain.linearRampToValueAtTime(0.34, time + 1.30);
+    cloudGain.gain.linearRampToValueAtTime(1.35, time + 1.56);
+    cloudGain.gain.linearRampToValueAtTime(0.94, time + 1.94);
+    cloudGain.gain.linearRampToValueAtTime(0.48, time + 2.48);
+    cloudGain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+    cloud.connect(cloudLow);
+    cloudLow.connect(cloudMid);
+    cloudMid.connect(cloudGain);
+    cloudGain.connect(thunderBus);
+    cloud.start(time);
+
+    [
+      { delay: 0.16, start: 72, end: 44, peak: 0.22, attack: 0.12, release: 0.78 },
+      { delay: 0.54, start: 66, end: 40, peak: 0.34, attack: 0.10, release: 0.88 },
+      { delay: 0.96, start: 60, end: 36, peak: 0.46, attack: 0.09, release: 0.96 },
+      { delay: 1.40, start: 56, end: 31, peak: 1.05, attack: 0.12, release: 1.42 },
+      { delay: 1.68, start: 50, end: 28, peak: 0.82, attack: 0.10, release: 1.34 }
+    ].forEach((spec) => {
+      const oscillator = this.#context.createOscillator();
+      const gainNode = this.#context.createGain();
+      const point = time + spec.delay;
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(spec.start, point);
+      oscillator.frequency.exponentialRampToValueAtTime(spec.end, point + spec.release);
+      gainNode.gain.setValueAtTime(0.0001, point);
+      gainNode.gain.linearRampToValueAtTime(spec.peak, point + spec.attack);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, point + spec.release);
+      oscillator.connect(gainNode);
+      gainNode.connect(thunderBus);
+      oscillator.start(point);
+      oscillator.stop(point + spec.release + 0.05);
+    });
+
+    [
+      { delay: 0.10, frequency: 320, peak: 0.24, duration: 0.50 },
+      { delay: 0.40, frequency: 280, peak: 0.32, duration: 0.58 },
+      { delay: 0.74, frequency: 250, peak: 0.42, duration: 0.64 },
+      { delay: 1.10, frequency: 220, peak: 0.54, duration: 0.72 },
+      { delay: 1.42, frequency: 195, peak: 1.02, duration: 0.98 },
+      { delay: 1.70, frequency: 165, peak: 0.88, duration: 1.12 }
+    ].forEach((spec) => {
+      const source = this.#context.createBufferSource();
+      const band = this.#context.createBiquadFilter();
+      const lowpass = this.#context.createBiquadFilter();
+      const gainNode = this.#context.createGain();
+      const point = time + spec.delay;
+      source.buffer = this.#noiseBuffer(spec.duration + 0.10);
+      band.type = "bandpass";
+      band.frequency.setValueAtTime(spec.frequency, point);
+      band.Q.value = 0.58;
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = 1350;
+      gainNode.gain.setValueAtTime(0.0001, point);
+      gainNode.gain.linearRampToValueAtTime(spec.peak, point + 0.07);
+      gainNode.gain.linearRampToValueAtTime(spec.peak * 0.70, point + spec.duration * 0.48);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, point + spec.duration);
+      source.connect(band);
+      band.connect(lowpass);
+      lowpass.connect(gainNode);
+      gainNode.connect(thunderBus);
+      source.start(point);
+    });
+
+    const impact = this.#context.createBufferSource();
+    const impactBand = this.#context.createBiquadFilter();
+    const impactLow = this.#context.createBiquadFilter();
+    const impactGain = this.#context.createGain();
+    const impactTime = time + 1.46;
+    impact.buffer = this.#noiseBuffer(1.45);
+    impactBand.type = "bandpass";
+    impactBand.frequency.value = 360;
+    impactBand.Q.value = 0.48;
+    impactLow.type = "lowpass";
+    impactLow.frequency.value = 1650;
+    impactGain.gain.setValueAtTime(0.0001, impactTime);
+    impactGain.gain.linearRampToValueAtTime(1.45, impactTime + 0.055);
+    impactGain.gain.linearRampToValueAtTime(1.05, impactTime + 0.24);
+    impactGain.gain.linearRampToValueAtTime(0.58, impactTime + 0.72);
+    impactGain.gain.exponentialRampToValueAtTime(0.0001, impactTime + 1.42);
+    impact.connect(impactBand);
+    impactBand.connect(impactLow);
+    impactLow.connect(impactGain);
+    impactGain.connect(thunderBus);
+    impact.start(impactTime);
+
+    [2.02, 2.34].forEach((delay, index) => {
+      const tail = this.#context.createBufferSource();
+      const tailLow = this.#context.createBiquadFilter();
+      const tailGain = this.#context.createGain();
+      const point = time + delay;
+      tail.buffer = this.#noiseBuffer(0.88);
+      tailLow.type = "lowpass";
+      tailLow.frequency.value = index === 0 ? 560 : 390;
+      tailGain.gain.setValueAtTime(0.0001, point);
+      tailGain.gain.linearRampToValueAtTime(index === 0 ? 0.52 : 0.38, point + 0.10);
+      tailGain.gain.exponentialRampToValueAtTime(0.0001, point + 0.86);
+      tail.connect(tailLow);
+      tailLow.connect(tailGain);
+      tailGain.connect(thunderBus);
+      tail.start(point);
+    });
+    return true;
+  }
+
+  playTitleWhiteoutHiss() {
+    if (!this.#enabled || this.#context === null || this.#backgroundSuspended) {
+      return false;
+    }
+
+    const time = this.#context.currentTime;
+    const duration = 3.35;
+    const air = this.#context.createBufferSource();
+    const highpass = this.#context.createBiquadFilter();
+    const lowpass = this.#context.createBiquadFilter();
+    const gainNode = this.#context.createGain();
+    air.buffer = this.#noiseBuffer(duration);
+    highpass.type = "highpass";
+    highpass.frequency.setValueAtTime(620, time);
+    lowpass.type = "lowpass";
+    lowpass.frequency.setValueAtTime(3200, time);
+    lowpass.frequency.linearRampToValueAtTime(2400, time + duration);
+    gainNode.gain.setValueAtTime(0.0001, time);
+    gainNode.gain.linearRampToValueAtTime(0.012, time + 0.65);
+    gainNode.gain.linearRampToValueAtTime(0.018, time + 1.55);
+    gainNode.gain.linearRampToValueAtTime(0.010, time + 2.45);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+    air.connect(highpass);
+    highpass.connect(lowpass);
+    lowpass.connect(gainNode);
+    gainNode.connect(this.#se);
+    air.start(time);
+    return true;
+  }
+
   createBattleSession() {
     invariant(!this.#disposed, "AUDIO_CONTROLLER_DISPOSED");
     const sessionId = `battle_audio_${this.#nextSessionId}`;

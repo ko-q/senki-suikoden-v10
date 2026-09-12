@@ -809,16 +809,17 @@ export class BattleController {
     }
     invariant(this.#latchedResult !== null, "BATTLE_RESULT_NOT_LATCHED");
     this.#flowState = BattleFlowState.FINISHING;
+    this.#clearRecoveryCheckpoint();
     const resultDialogue = this.#latchedResult.outcome === BattleOutcome.VICTORY
       ? this.#stage.victoryDialogue
       : this.#stage.defeatDialogue;
-    if (resultDialogue !== null) {
-      await this.#present(createDialoguePresentationRequest(resultDialogue));
-    }
     await this.#present(createSemanticPresentationRequest(
       PresentationRequestType.BATTLE_RESULT,
       this.#latchedResult
     ));
+    if (resultDialogue !== null) {
+      await this.#present(createDialoguePresentationRequest(resultDialogue));
+    }
     this.#throwIfDisposed();
     this.#completionSettled = true;
     this.#resolveCompletion(this.#latchedResult);
@@ -958,6 +959,25 @@ export class BattleController {
       }
     } catch (error) {
       this.#recordDiagnostic("CHECKPOINT", error);
+    }
+  }
+
+  #clearRecoveryCheckpoint() {
+    try {
+      const pending = this.#checkpointPort.requestRecoveryClear();
+      if (pending !== null && typeof pending?.then === "function") {
+        pending.then((result) => {
+          if (!this.#disposed && result?.ok === false) {
+            this.#recordDiagnostic("CHECKPOINT_CLEAR", new Error(result.code));
+          }
+        }).catch((error) => {
+          if (!this.#disposed) {
+            this.#recordDiagnostic("CHECKPOINT_CLEAR", error);
+          }
+        });
+      }
+    } catch (error) {
+      this.#recordDiagnostic("CHECKPOINT_CLEAR", error);
     }
   }
 

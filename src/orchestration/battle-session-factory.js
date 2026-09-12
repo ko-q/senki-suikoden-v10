@@ -6,6 +6,7 @@ import { PreparedBattleLoad } from "../core/prepared-battle-load.js";
 import { BattleRandom } from "../domain/battle-random.js";
 import { Stage } from "../domain/stage.js";
 import { BattleEffectManager } from "../presentation/battle-effect-manager.js";
+import { BattleResultEffectSession } from "../presentation/battle-result-effects.js";
 import { BattleRenderer } from "../presentation/battle-renderer.js";
 import { BattleScreen } from "../presentation/battle-screen.js";
 import { BattleVisualEffectSession } from "../presentation/battle-visual-effects.js";
@@ -40,7 +41,8 @@ export class BattleSessionFactory {
     invariant(
       checkpointPort !== null
         && typeof checkpointPort === "object"
-        && typeof checkpointPort.requestRecoverySave === "function",
+        && typeof checkpointPort.requestRecoverySave === "function"
+        && typeof checkpointPort.requestRecoveryClear === "function",
       "BATTLE_SESSION_CHECKPOINT_PORT_INVALID"
     );
     invariant(
@@ -65,7 +67,8 @@ export class BattleSessionFactory {
     invariant(
       checkpointPort !== null
         && typeof checkpointPort === "object"
-        && typeof checkpointPort.requestRecoverySave === "function",
+        && typeof checkpointPort.requestRecoverySave === "function"
+        && typeof checkpointPort.requestRecoveryClear === "function",
       "BATTLE_SESSION_CHECKPOINT_PORT_INVALID"
     );
     const view = this.#viewFactory.create();
@@ -73,6 +76,7 @@ export class BattleSessionFactory {
     let controller = null;
     let effectManager = null;
     let visualSession = null;
+    let resultSession = null;
     let audioSession = null;
     try {
       view.elements.versionValue.textContent = GAME_VERSION;
@@ -92,11 +96,15 @@ export class BattleSessionFactory {
         board: view.elements.board,
         effectLayer: view.elements.effectLayer
       });
+      resultSession = new BattleResultEffectSession({
+        layer: view.elements.resultEffectLayer
+      });
       audioSession = this.#audioController.createBattleSession();
       effectManager = new BattleEffectManager({
         renderer,
         audioSession,
         visualSession,
+        resultSession,
         ...(this.#effectDurations === undefined
           ? {}
           : { durations: this.#effectDurations })
@@ -132,6 +140,9 @@ export class BattleSessionFactory {
       }
       if (effectManager === null && visualSession !== null) {
         visualSession.dispose();
+      }
+      if (effectManager === null && resultSession !== null) {
+        resultSession.dispose();
       }
       if (effectManager === null && audioSession !== null) {
         audioSession.dispose();

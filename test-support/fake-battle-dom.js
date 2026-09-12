@@ -39,6 +39,7 @@ export class FakeElement {
     this.dataset = {};
     this.disabled = false;
     this.hidden = false;
+    this.focusCount = 0;
     this.listeners = new Map();
     this.offsetHeight = 48;
     this.offsetLeft = 0;
@@ -49,6 +50,7 @@ export class FakeElement {
     this.selectorMap = selectorMap;
     this.style = new FakeStyle();
     this.textContent = "";
+    this.tabIndex = -1;
     this.type = "";
   }
 
@@ -131,6 +133,10 @@ export class FakeElement {
     this.parentNode = null;
   }
 
+  focus() {
+    this.focusCount += 1;
+  }
+
   querySelector(selector) {
     const mapped = this.selectorMap?.get(selector) ?? null;
     if (mapped !== null) {
@@ -155,16 +161,27 @@ export class FakeElement {
     this.attributes.set(name, value);
   }
 
-  dispatch(type) {
+  dispatch(type, init = {}) {
     if (this.disabled) {
       return;
     }
     const listeners = this.listeners.get(type);
     if (listeners !== undefined) {
+      const event = {
+        type,
+        target: this,
+        defaultPrevented: false,
+        preventDefault() {
+          this.defaultPrevented = true;
+        },
+        ...init
+      };
       for (const listener of [...listeners]) {
-        listener({ type, target: this });
+        listener(event);
       }
+      return event;
     }
+    return null;
   }
 }
 
@@ -197,6 +214,7 @@ export function createFakeBattleElements() {
     pathButton: new FakeElement(),
     pathSummary: new FakeElement(),
     phaseValue: new FakeElement(),
+    resultEffectLayer: new FakeElement(),
     resetButton: new FakeElement(),
     selectedUnitText: new FakeElement(),
     tacticButton: new FakeElement(),
@@ -210,6 +228,7 @@ export function createFakeBattleElements() {
   elements.actionPanel.hidden = true;
   elements.dialogueOverlay.hidden = true;
   elements.facingPanel.hidden = true;
+  elements.resultEffectLayer.hidden = true;
   elements.tacticPanel.hidden = true;
   return elements;
 }
@@ -252,6 +271,27 @@ export function createFakePersistenceElements() {
   elements.persistenceUnavailable.hidden = true;
   elements.recoveryOverlay.hidden = true;
   return elements;
+}
+
+export function createFakeGameResultElements() {
+  const elements = {
+    details: new FakeElement(),
+    message: new FakeElement(),
+    newBattleButton: new FakeElement(),
+    overlay: new FakeElement(),
+    title: new FakeElement()
+  };
+  elements.overlay.hidden = true;
+  return elements;
+}
+
+export function createFakeTitleElements() {
+  return {
+    background: new FakeElement(),
+    logo: new FakeElement(),
+    prompt: new FakeElement(),
+    root: new FakeElement()
+  };
 }
 
 export function installFakeDocument(elements = null) {

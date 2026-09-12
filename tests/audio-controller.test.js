@@ -62,6 +62,21 @@ test("defeat replaces battle BGM once and keeps the v9 start offset", async () =
   runtime.controller.dispose();
 });
 
+test("title thunder and whiteout hiss keep the v9 synthesized source sequence", async () => {
+  const runtime = createController();
+  assert.equal(runtime.controller.playTitleThunder(), false);
+  assert.equal(runtime.controller.playTitleWhiteoutHiss(), false);
+  await runtime.controller.unlock();
+  await flushAudioTasks();
+
+  assert.equal(runtime.controller.playTitleThunder(), true);
+  assert.equal(runtime.context.createdOscillators.length, 5);
+  assert.equal(runtime.context.createdBufferSources.length, 10);
+  assert.equal(runtime.controller.playTitleWhiteoutHiss(), true);
+  assert.equal(runtime.context.createdBufferSources.length, 11);
+  runtime.controller.dispose();
+});
+
 test("a Battle audio session owns and stops its transient sources", async () => {
   const runtime = createController();
   await runtime.controller.unlock();

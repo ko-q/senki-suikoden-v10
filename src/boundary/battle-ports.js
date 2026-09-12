@@ -49,6 +49,10 @@ export function requireBattleCheckpointPort(port) {
     typeof port.requestRecoverySave === "function",
     "BATTLE_CHECKPOINT_METHOD_REQUIRED"
   );
+  invariant(
+    typeof port.requestRecoveryClear === "function",
+    "BATTLE_CHECKPOINT_CLEAR_METHOD_REQUIRED"
+  );
   return port;
 }
 
@@ -75,4 +79,6 @@ export class NullBattleCheckpointPort {
   requestRecoverySave(snapshot) {
     invariant(snapshot !== null && typeof snapshot === "object", "BATTLE_SNAPSHOT_REQUIRED");
   }
+
+  requestRecoveryClear() {}
 }

@@ -40,10 +40,15 @@ class RecordingPresentationPort {
 class RecordingCheckpointPort {
   constructor() {
     this.snapshots = [];
+    this.clearCount = 0;
   }
 
   requestRecoverySave(snapshot) {
     this.snapshots.push(snapshot);
+  }
+
+  requestRecoveryClear() {
+    this.clearCount += 1;
   }
 }
 
@@ -267,7 +272,14 @@ test("movement and attack remove a defeated Unit before latching victory", async
         outcome: ObjectiveOutcome.VICTORY,
         targetArmy: Affiliation.ENEMY
       }
-    ]
+    ],
+    speeches: [{
+      id: "victory_speech",
+      speakerCharacterId: "actor_character",
+      text: "Victory dialogue."
+    }],
+    dialogues: [{ id: "victory_dialogue", speechIds: ["victory_speech"] }],
+    victoryDialogueId: "victory_dialogue"
   });
   const runtime = createControllerRuntime(stage);
   const { completion } = await startNewBattle(runtime);
@@ -287,11 +299,13 @@ test("movement and attack remove a defeated Unit before latching victory", async
   assert.equal(target.troops, 0);
   assert.equal(actor.actionState, UnitActionState.FINISHED);
   assert.equal(runtime.controller.flowState, BattleFlowState.FINISHING);
-  assert.deepEqual(runtime.presentationPort.requests.map((item) => item.type).slice(-4), [
+  assert.equal(runtime.checkpointPort.clearCount, 1);
+  assert.deepEqual(runtime.presentationPort.requests.map((item) => item.type).slice(-5), [
     PresentationRequestType.MOVE,
     PresentationRequestType.ACTION,
     PresentationRequestType.DAMAGE,
-    PresentationRequestType.BATTLE_RESULT
+    PresentationRequestType.BATTLE_RESULT,
+    PresentationRequestType.DIALOGUE
   ]);
 });
 

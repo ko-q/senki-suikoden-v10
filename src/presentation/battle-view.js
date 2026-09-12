@@ -28,6 +28,7 @@ export const BATTLE_VIEW_ELEMENT_IDS = Object.freeze({
   pathButton: "pathButton",
   pathSummary: "pathSummary",
   phaseValue: "phaseValue",
+  resultEffectLayer: "resultEffectLayer",
   resetButton: "resetButton",
   selectedUnitText: "selectedUnitText",
   tacticButton: "tacticButton",

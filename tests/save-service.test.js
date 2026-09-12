@@ -319,6 +319,22 @@ test("recovery checkpoints are serialized in enqueue order and revisions cannot 
   assert.equal(backup.battle.turn, 4);
 });
 
+test("recovery deletion is queued after older checkpoints and leaves no stale generation", async () => {
+  const fixture = createPopulatedSaveBattle();
+  const runtime = createSaveRuntime({ stageFactory: fixture.stageFactory });
+  const adapter = new SaveCheckpointAdapter(runtime.service);
+
+  const save = adapter.requestRecoverySave(fixture.battle);
+  const clear = adapter.requestRecoveryClear();
+  assert.equal((await save).ok, true);
+  assert.equal((await clear).ok, true);
+  assert.deepEqual(runtime.repository.readSlot("recovery"), {
+    primary: null,
+    temporary: null,
+    backup: null
+  });
+});
+
 test("two writers detect a changed slot and require an explicit refresh", () => {
   const fixture = createPopulatedSaveBattle();
   const storage = new MemoryStorage();

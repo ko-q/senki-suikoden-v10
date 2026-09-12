@@ -32,11 +32,15 @@ package Presentation {
   class BattleRenderer
   class BattleEffectManager
   class BattleVisualEffectSession
+  class BattleResultEffectSession
   class BattleVisualAssetCatalog
+  class ScreenVisualAssetCatalog
   class DialogueController
   class BattleView
   class BattleViewFactory
   class PersistencePanel
+  class GameResultPanel
+  class TitleScreen
 }
 
 package Orchestration {
@@ -111,7 +115,10 @@ Game --> AudioController
 Game --> BattleSessionFactory : create candidate
 Game --> BattleSessionHost : transactional swap
 Game --> PersistencePanel : 20 slots / Repair UI
+Game --> GameResultPanel : BattleResult後
 Game --> SaveCheckpointAdapter
+TitleScreen ..> Game : opening完了後にstart
+TitleScreen ..> AudioController : semantic callback
 
 BattleSessionHost *-- BattleSession
 BattleSession --> BattleController
@@ -136,8 +143,11 @@ BattleScreen *-- BattleRenderer
 BattleScreen *-- BattleEffectManager
 BattleScreen *-- DialogueController
 BattleEffectManager *-- BattleVisualEffectSession
+BattleEffectManager *-- BattleResultEffectSession
 BattleEffectManager *-- BattleAudioSession
 BattleVisualEffectSession --> BattleVisualAssetCatalog
+BattleResultEffectSession --> ScreenVisualAssetCatalog
+TitleScreen --> ScreenVisualAssetCatalog
 BattleVisualEffectSession --> Stage : read-only layout
 BattleAudioSession --> AudioController
 AudioController --> AudioAssetCatalog
@@ -252,6 +262,18 @@ note right of BattleVisualEffectSession
 盤面と分離したBattle専用overlayを所有する。
 意味要求だけから画像演出へ写像し、
 Abort／disposeでDOMとtimerを全除去する。
+end note
+
+note right of BattleResultEffectSession
+勝敗の全画面layerとv9順のfadeを所有する。
+全layer完了後の新しいtapだけを受け付け、
+Abort／disposeで待機とDOMを除去する。
+end note
+
+note right of TitleScreen
+初回tapでopeningを開始し、
+ready後の次tapでGameを起動する。
+DomainとBattleSessionはopening中に生成しない。
 end note
 
 note right of StageEventManager

@@ -1,6 +1,6 @@
 {
   "name": "senki-suikoden-v10",
-  "version": "10.0.0-dev.12",
+  "version": "10.0.0-dev.13",
   "private": true,
   "type": "module",
   "scripts": {

@@ -247,3 +247,25 @@ BattleRandomの消費順は変更していない。v9の追跡対象ファイル
 PresentationRequestには画像file名やasset IDを追加せず、座標・Action種別・状態差分だけから
 Presentation層で演出へ写像する。Save format、content revision、storage prefix、戦闘式、
 AI、人物値、BattleRandomの消費順は変更していない。v9の追跡対象ファイルも変更していない。
+
+## Milestone 13で照合した範囲
+
+基準commitの`screen-assets.js`にあるtitle／勝利／敗北の7個のData URL、`game.js`の
+`VICTORY_EFFECT_TIMING`、`DEFEAT_EFFECT_TIMING`、title初期化処理、終了sequence、
+`index.html`の各layer CSSを直接確認した。
+
+次をv10へ責務分離して実装した。
+
+- 7個のData URLを個別JPEG／PNG fileへ復号し、byte数とSHA-256がv9と一致することをtestで固定。
+- 初回tapで音声をunlockして雷鳴、2.9秒後の白転音、5.8秒後のlogo、6.62秒後のtitle BGM、
+  6.77秒後のreadyを進める`TitleScreen`。
+- ready前の追加tapを無視し、ready後の新しいtapと460msのexit後にだけ`Game.start()`を呼ぶ境界。
+- 暗幕と将兵を5秒、勝利文字を5秒、光線を3秒で順次表示する勝利演出。
+- 暗幕と敗残将兵を5秒、敗北文字を5秒で順次表示する敗北演出。
+- 全layer完了前のtap／repeat keyを無視し、完了後のtapまたはEnter／Spaceだけで進む入力gate。
+- `BATTLE_RESULT`演出、結果Dialogue、BattleResult Promise、Game結果画面の順序。
+- 終了確定時のrecovery clearを先行checkpointの後へ直列化し、結果後の古い復元を防ぐ処理。
+- title／結果待機中のAbort／disposeによるtimer、listener、DOMの一括破棄。
+
+Save format、content revision、storage prefix、戦闘式、AI、人物値、BattleRandomの消費順は
+変更していない。v9の追跡対象ファイルも変更していない。

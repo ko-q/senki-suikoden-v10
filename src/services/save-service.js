@@ -385,6 +385,12 @@ export class SaveService {
     return task;
   }
 
+  enqueueRecoveryDelete() {
+    const task = this.#recoveryQueue.then(() => this.deleteSlot({ slotId: "recovery" }));
+    this.#recoveryQueue = task.then(() => undefined, () => undefined);
+    return task;
+  }
+
   inspectSlot(slotId, saveKind = SaveKind.MANUAL) {
     requireIdentifier(slotId, "SAVE_SLOT_ID_INVALID");
     requireEnumValue(saveKind, SaveKind, "SAVE_KIND_INVALID");
@@ -732,5 +738,9 @@ export class SaveCheckpointAdapter {
     const completion = this.#saveService.enqueueRecoverySave(snapshot);
     this.#onCheckpoint(snapshot, completion);
     return completion;
+  }
+
+  requestRecoveryClear() {
+    return this.#saveService.enqueueRecoveryDelete();
   }
 }

@@ -868,8 +868,9 @@ Command guard:
 ### Battle終了
 
 - `finishBattle()` は1回だけ実行できる。
-- result Presentation後にBattleResult Promiseをresolveする。
-- GameがPromiseを受けて `endBattle()` を行う。
+- 終了確定時にrecovery clearを通知し、先行するrecovery saveの後へ削除を直列化する。
+- `BATTLE_RESULT`専用演出、結果Dialogueの順で処理し、その後にBattleResult Promiseをresolveする。
+- GameがPromiseを受けてGame所有の結果画面を表示する。
 - ControllerはGameへcallback以外の逆参照を持たない。
 - `dispose()` でBattleを破棄した場合は未完了PromiseをAbortErrorでsettleし、Gameが正常な画面切替として処理する。
 
@@ -980,6 +981,8 @@ selectedPathは `candidatePaths[selectedPathIndex]` から導出する。
 - BattleEffectManagerはDomainを変更せず、確定済み結果の見せ方だけを担当する。
 - BattleEffectManagerはPresentationRequestに応じてAudioControllerを利用できる。
 - 演出失敗をDomain再実行で補償しない。必要なら画面を再renderし、確定済みDomainを正本とする。
+- BattleResultEffectSessionは勝敗画像layerとtap待機をBattle単位で所有する。
+- TitleScreenはBattle外に置き、opening完了後の二回目の明示入力でGameを開始する。
 
 ## 27. Save
 
@@ -1331,6 +1334,7 @@ undo hierarchy
 | 保存分離 | v10のSave/Load/Delete後もv9 key値がbyte単位で変わらない |
 | Transactional Load | decode/migrate/restore/validation各失敗で旧Battleが変わらない |
 | 起動時recovery | 正常候補がある場合は明示選択までBattleを生成せず、Load時にintro/phase処理を再実行しない |
+| 終了時recovery | 終了結果latch後は先行checkpointより後にrecovery三世代を削除し、結果後に古いBattleを提示しない |
 | DOM session交換 | candidateをdetached rootで接続後、表示rootを1個だけにし、旧button/cell listenerを解除する |
 | Save UI競合 | stale guardでSave/Load/Repair/Deleteせず、旧sessionと三世代rawを維持して再確認を要求する |
 | Cancel | dispose後に旧awaitが完了してもDomain、画面、新Battleへ作用しない |
@@ -1372,6 +1376,9 @@ Milestone 12ではv9と同一byteの戦闘演出画像8点を分離し、BattleV
 継続中の突撃砂煙は盤面再描画に巻き込まれず、Load／新規開始／disposeでは旧Battleの
 演出DOMとtimerを一括破棄する。広域幻術は霧開始から300ms後に専用SE、2240ms後に
 幻術cast音と範囲flashへ進むv9順序に合わせた。Save形式、戦闘式、AI、Domain RNGは変更していない。
+Milestone 13ではv9と同一byteのtitle／勝利／敗北素材7点、title雷鳴・白転音、二段階title入力、
+勝利13秒／敗北10秒のlayer表示、完了後tap、結果Dialogue、Game結果画面を接続した。
+終了時recovery clearは先行保存の後へ直列化し、結果後に古い戦闘が復元されないようにした。
 
 次は設計未決ではなく、実装時に正本から転記・照合する項目である。
 
@@ -1379,20 +1386,18 @@ Milestone 12ではv9と同一byteの戦闘演出画像8点を分離し、BattleV
 - 個別AIの優先順位と確率。
 - 増援cellの厳密な走査順。
 - Trap回避とSpell trap免疫の能力ID。
-- 正式人物portrait、Action cut-in、Stage map、title／結果画面のmapping・同期時間。
+- 正式人物portrait、Action cut-in、Stage mapのmapping・同期時間。
 - 人物能力、技能、性格。
 
 ## 36. 次に行うこと
 
-統合レビューとMilestone 12までは完了済み。20枠のSave UI、fallback Repair、既存音声、
-戦闘画像演出の分離実装まで完了したため、
-実装順11以降を進める。
+統合レビューとMilestone 13までは完了済み。20枠のSave UI、fallback Repair、既存音声、
+戦闘画像演出、title／勝敗／結果画面まで完了したため、正本依存部分へ進む。
 
 ```text
-1 title／勝利／敗北の専用画面と結果演出
-2 正式人物データ入手後にportrait／Action cut-inと正式Stageを順次移植
-3 Stage map画像を正式Stageへ接続
-4 v9との回帰比較
+1 正式人物データ入手後にportrait／Action cut-inと正式Stageを順次移植
+2 Stage map画像を正式Stageへ接続
+3 v9との回帰比較
 ```
 
 以後、新しい設計問題は `問題 / 影響 / 修正案` で提示する。承認のないゲーム実装、v9変更、ゲームバランス変更、AI性能変更は行わない。

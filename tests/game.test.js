@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { AudioThemeId } from "../src/audio/audio-cue.js";
+import { ActionType, createActionRequest } from "../src/core/action-request.js";
 import { BattleFlowState } from "../src/core/battle-flow-state.js";
 import { createBattleSaveData } from "../src/core/battle-save-data.js";
 import { PresentationRequestType } from "../src/core/presentation-request.js";
@@ -16,11 +17,13 @@ import { Game } from "../src/orchestration/game.js";
 import { SaveKind } from "../src/persistence/save-codec.js";
 import { SaveRepository } from "../src/persistence/save-repository.js";
 import { BattleViewFactory } from "../src/presentation/battle-view.js";
+import { GameResultPanel } from "../src/presentation/game-result-panel.js";
 import { PersistencePanel } from "../src/presentation/persistence-panel.js";
 import { SaveService } from "../src/services/save-service.js";
 import {
   FakeElement,
   createFakeBattleViewTemplate,
+  createFakeGameResultElements,
   createFakePersistenceElements,
   installFakeDocument
 } from "../test-support/fake-battle-dom.js";
@@ -45,6 +48,7 @@ function createGameRuntime({ storage = new MemoryStorage(), persistence = true }
   const battleHost = new FakeElement();
   const { template, createdViews } = createFakeBattleViewTemplate();
   const panelElements = createFakePersistenceElements();
+  const resultElements = createFakeGameResultElements();
   const viewFactory = new BattleViewFactory({ host: battleHost, template });
   const sessionFactory = new BattleSessionFactory({
     viewFactory,
@@ -62,12 +66,14 @@ function createGameRuntime({ storage = new MemoryStorage(), persistence = true }
     elements: panelElements,
     confirmAction: () => true
   });
+  const resultPanel = new GameResultPanel({ elements: resultElements });
   const game = new Game({
     stageFactory,
     stageId: DEVELOPMENT_STAGE_DEFINITION.id,
     sessionFactory,
     saveService,
     persistencePanel: panel,
+    resultPanel,
     randomSeedFactory: () => 1
   });
   return {
@@ -76,6 +82,7 @@ function createGameRuntime({ storage = new MemoryStorage(), persistence = true }
     createdViews,
     game,
     panelElements,
+    resultElements,
     saveService,
     stageFactory,
     storage
@@ -95,6 +102,45 @@ test("Game queues the chapter battle theme and owns AudioController disposal", (
   } finally {
     runtime.game.dispose();
     assert.equal(runtime.audioController.isDisposed, true);
+    restoreDocument();
+  }
+});
+
+test("Game shows the result panel only after the BattleResult sequence completes", async () => {
+  const restoreDocument = installFakeDocument();
+  const runtime = createGameRuntime({ persistence: false });
+  try {
+    runtime.game.start();
+    const session = runtime.game.currentSession;
+    const view = runtime.createdViews[0];
+    view.elements.dialogueNextButton.dispatch("click");
+    await waitUntil(
+      () => session.controller.flowState === BattleFlowState.IDLE,
+      "RESULT_BATTLE_READY"
+    );
+    const actor = session.stage.getUnit("preview_player");
+    const target = session.stage.getUnit("preview_enemy");
+    target.restoreTroops(1);
+
+    assert.equal(await session.controller.executeAction(
+      createActionRequest(ActionType.NORMAL_ATTACK, actor, target),
+      [
+        { x: 1, y: 2 },
+        { x: 2, y: 2 },
+        { x: 3, y: 2 },
+        { x: 4, y: 2 },
+        { x: 5, y: 2 }
+      ]
+    ), true);
+    await waitUntil(() => runtime.resultElements.overlay.hidden === false, "RESULT_PANEL");
+    assert.equal(runtime.resultElements.title.textContent, "Victory");
+    assert.equal(runtime.resultElements.message.textContent, "stage.foundation_preview");
+
+    runtime.resultElements.newBattleButton.dispatch("click");
+    assert.equal(runtime.resultElements.overlay.hidden, true);
+    assert.equal(runtime.createdViews.length, 2);
+  } finally {
+    runtime.game.dispose();
     restoreDocument();
   }
 });

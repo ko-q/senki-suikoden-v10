@@ -71,8 +71,15 @@ export class BattleEffectManager {
   #durationOverrideTypes;
   #audioSession;
   #visualSession;
+  #resultSession;
 
-  constructor({ renderer, durations = {}, audioSession = null, visualSession = null }) {
+  constructor({
+    renderer,
+    durations = {},
+    audioSession = null,
+    visualSession = null,
+    resultSession = null
+  }) {
     invariant(renderer instanceof BattleRenderer, "BATTLE_EFFECT_RENDERER_REQUIRED");
     invariant(
       audioSession === null
@@ -92,11 +99,21 @@ export class BattleEffectManager {
         ),
       "BATTLE_EFFECT_VISUAL_SESSION_INVALID"
     );
+    invariant(
+      resultSession === null
+        || (
+          typeof resultSession === "object"
+          && typeof resultSession.present === "function"
+          && typeof resultSession.dispose === "function"
+        ),
+      "BATTLE_EFFECT_RESULT_SESSION_INVALID"
+    );
     this.#renderer = renderer;
     this.#durations = normalizeDurations(durations);
     this.#durationOverrideTypes = new Set(Object.keys(durations));
     this.#audioSession = audioSession;
     this.#visualSession = visualSession;
+    this.#resultSession = resultSession;
   }
 
   async present(request, abortSignal) {
@@ -116,15 +133,19 @@ export class BattleEffectManager {
     }
     this.#renderer.renderPresentation(request);
     try {
-      const visualHandled = this.#visualSession === null
+      const durationOverride = this.#durationOverrideTypes.has(request.type)
+        ? this.#durations[request.type]
+        : undefined;
+      const resultHandled = this.#resultSession === null
         ? false
-        : await this.#visualSession.present(
+        : await this.#resultSession.present(
           request,
           abortSignal,
-          this.#durationOverrideTypes.has(request.type)
-            ? this.#durations[request.type]
-            : undefined
+          durationOverride
         );
+      const visualHandled = resultHandled || this.#visualSession === null
+        ? resultHandled
+        : await this.#visualSession.present(request, abortSignal, durationOverride);
       if (!visualHandled) {
         await waitForDuration(this.#durations[request.type], abortSignal);
       }
@@ -136,6 +157,11 @@ export class BattleEffectManager {
   }
 
   dispose() {
+    if (this.#resultSession !== null) {
+      const resultSession = this.#resultSession;
+      this.#resultSession = null;
+      resultSession.dispose();
+    }
     if (this.#visualSession !== null) {
       const visualSession = this.#visualSession;
       this.#visualSession = null;

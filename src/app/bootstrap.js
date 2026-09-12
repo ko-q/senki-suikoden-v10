@@ -1,14 +1,17 @@
 import {
   AudioController,
+  AudioThemeId,
   BattleSessionFactory,
   BattleViewFactory,
   CharacterManager,
   DEVELOPMENT_STAGE_DEFINITION,
   Game,
+  GameResultPanel,
   PersistencePanel,
   SaveRepository,
   SaveService,
   StageFactory,
+  TitleScreen,
   createV9CompatibleTerrainCatalog
 } from "../index.js";
 
@@ -26,6 +29,21 @@ const persistenceElements = {
   startNewFromRecoveryButton: document.querySelector("#startNewFromRecoveryButton")
 };
 
+const resultElements = {
+  details: document.querySelector("#resultDetails"),
+  message: document.querySelector("#resultMessage"),
+  newBattleButton: document.querySelector("#resultNewBattleButton"),
+  overlay: document.querySelector("#resultOverlay"),
+  title: document.querySelector("#resultTitle")
+};
+
+const titleElements = {
+  background: document.querySelector("#titleBackground"),
+  logo: document.querySelector("#titleLogo"),
+  prompt: document.querySelector("#titlePrompt"),
+  root: document.querySelector("#titleScreen")
+};
+
 const stageFactory = new StageFactory({
   definitions: [DEVELOPMENT_STAGE_DEFINITION],
   characterManager: new CharacterManager([]),
@@ -38,6 +56,7 @@ const viewFactory = new BattleViewFactory({
 const audioController = new AudioController();
 const sessionFactory = new BattleSessionFactory({ viewFactory, audioController });
 const persistencePanel = new PersistencePanel({ elements: persistenceElements });
+const resultPanel = new GameResultPanel({ elements: resultElements });
 
 let saveService = null;
 try {
@@ -57,9 +76,22 @@ const game = new Game({
   sessionFactory,
   saveService,
   persistencePanel,
+  resultPanel,
   audioController
 });
-game.start();
+const titleScreen = new TitleScreen({
+  elements: titleElements,
+  onPrepare: async () => {
+    const unlocked = await game.unlockAudio();
+    renderAudioButton();
+    return unlocked;
+  },
+  onThunder: () => audioController.playTitleThunder(),
+  onWhiteout: () => audioController.playTitleWhiteoutHiss(),
+  onTitleTheme: () => audioController.startTheme(AudioThemeId.TITLE),
+  onStart: () => game.start()
+});
+titleScreen.start();
 
 function renderAudioButton() {
   if (!game.isAudioUnlocked) {
@@ -97,6 +129,7 @@ if (typeof globalThis.addEventListener === "function") {
     game.handleStorageEvent(event);
   });
   globalThis.addEventListener("pagehide", () => {
+    titleScreen.dispose();
     game.dispose();
   }, { once: true });
 }

@@ -8,6 +8,7 @@ import {
   DEFAULT_MANUAL_SLOT_IDS,
   PersistencePanel
 } from "../presentation/persistence-panel.js";
+import { GameResultPanel } from "../presentation/game-result-panel.js";
 import { SaveCheckpointAdapter, SaveService } from "../services/save-service.js";
 import { BattleSessionFactory } from "./battle-session-factory.js";
 import { BattleSessionHost } from "./battle-session-host.js";
@@ -44,6 +45,7 @@ export class Game {
   #sessionFactory;
   #saveService;
   #persistencePanel;
+  #resultPanel;
   #manualSlotIds;
   #randomSeedFactory;
   #sessionHost;
@@ -58,6 +60,7 @@ export class Game {
     sessionFactory,
     saveService = null,
     persistencePanel,
+    resultPanel,
     manualSlotIds = DEFAULT_MANUAL_SLOT_IDS,
     randomSeedFactory = () => BattleRandom.createSeed(),
     audioController = null
@@ -76,6 +79,7 @@ export class Game {
       persistencePanel instanceof PersistencePanel,
       "GAME_PERSISTENCE_PANEL_REQUIRED"
     );
+    invariant(resultPanel instanceof GameResultPanel, "GAME_RESULT_PANEL_REQUIRED");
     invariant(Array.isArray(manualSlotIds), "GAME_MANUAL_SLOT_IDS_INVALID");
     invariant(manualSlotIds.length > 0, "GAME_MANUAL_SLOT_IDS_EMPTY");
     const normalizedSlotIds = manualSlotIds.map((slotId) => (
@@ -97,6 +101,7 @@ export class Game {
     this.#sessionFactory = sessionFactory;
     this.#saveService = saveService;
     this.#persistencePanel = persistencePanel;
+    this.#resultPanel = resultPanel;
     this.#manualSlotIds = Object.freeze(normalizedSlotIds);
     this.#randomSeedFactory = randomSeedFactory;
     this.#audioController = resolvedAudioController;
@@ -143,6 +148,9 @@ export class Game {
       onResumeRecovery: (guard) => this.resumeRecovery(guard),
       onSave: (slotId) => this.saveManual(slotId),
       onStartNewFromRecovery: () => this.startNewBattle(),
+    });
+    this.#resultPanel.bindHandlers({
+      onNewBattle: () => this.startNewBattle()
     });
     this.#persistencePanel.setPersistenceAvailable(this.#saveService !== null);
     this.refreshManualSlots(false);
@@ -204,8 +212,10 @@ export class Game {
       });
       const replacement = this.#sessionHost.replaceWithNewBattle(candidate);
       this.#audioController.startBattleThemeForChapter(replacement.session.stage.chapterNumber);
+      this.#resultPanel.hide();
       this.#persistencePanel.hideRecoveryPrompt();
       this.#updateSessionState();
+      this.#observeCompletion(replacement);
       if (announce) {
         this.#persistencePanel.showStatus("New development battle started.");
       }
@@ -381,12 +391,12 @@ export class Game {
   }
 
   unlockAudio() {
-    this.#requireActiveGame();
+    invariant(!this.#disposed, "GAME_DISPOSED");
     return this.#audioController.unlock();
   }
 
   toggleAudio() {
-    this.#requireActiveGame();
+    invariant(!this.#disposed, "GAME_DISPOSED");
     return this.#audioController.toggleEnabled();
   }
 
@@ -412,6 +422,7 @@ export class Game {
     this.#sessionHost.dispose();
     this.#audioController.dispose();
     this.#persistencePanel.dispose();
+    this.#resultPanel.dispose();
   }
 
   #load(slotId, saveKind, guard, successMessage) {
@@ -425,8 +436,10 @@ export class Game {
       const prepared = this.#saveService.prepareLoad({ slotId, saveKind, guard });
       const replacement = this.#sessionHost.replaceWithPreparedLoad(prepared);
       this.#audioController.startBattleThemeForChapter(replacement.session.stage.chapterNumber);
+      this.#resultPanel.hide();
       this.#persistencePanel.hideRecoveryPrompt();
       this.#updateSessionState();
+      this.#observeCompletion(replacement);
       this.#persistencePanel.showStatus(successMessage);
       return replacement;
     } catch (error) {
@@ -480,6 +493,30 @@ export class Game {
         }
       });
     }
+  }
+
+  #observeCompletion(replacement) {
+    const { session, completion } = replacement;
+    if (completion === null || typeof completion?.then !== "function") {
+      return;
+    }
+    completion.then((result) => {
+      if (this.#disposed || this.#sessionHost.currentSession !== session) {
+        return;
+      }
+      this.#updateSessionState();
+      this.#resultPanel.show({
+        result,
+        stageTitle: session.stage.titleKey
+      });
+    }).catch((error) => {
+      if (error?.name !== "AbortError" && !this.#disposed) {
+        this.#persistencePanel.showStatus(
+          "The battle result could not be completed.",
+          "error"
+        );
+      }
+    });
   }
 
   #updateSessionState() {

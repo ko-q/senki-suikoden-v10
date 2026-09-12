@@ -28,6 +28,281 @@ body {
     #11100e;
 }
 
+.title-screen {
+  position: fixed;
+  z-index: 5000;
+  inset: 0;
+  overflow: hidden;
+  background: #050608;
+  opacity: 1;
+}
+
+.title-screen.active {
+  display: block;
+}
+
+.title-screen:not(.active) {
+  display: none;
+}
+
+.title-bg {
+  position: absolute;
+  inset: 0;
+  background-position: center top;
+  background-size: cover;
+  transform: scale(1.04);
+}
+
+.title-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.title-logo-layer {
+  position: absolute;
+  z-index: 2;
+  top: 8.2%;
+  left: 50%;
+  width: min(86vw, 630px);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.title-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  filter:
+    drop-shadow(0 4px 4px rgb(0 0 0 / 0.45))
+    drop-shadow(0 12px 26px rgb(0 0 0 / 0.42));
+  transform: translateY(14px) scale(0.92);
+}
+
+.title-whiteout {
+  position: absolute;
+  z-index: 4;
+  top: 26%;
+  left: 50%;
+  width: 220vmax;
+  height: 220vmax;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(255 255 255) 0%,
+    rgb(255 255 255) 42%,
+    rgb(255 255 255 / 0.98) 56%,
+    rgb(255 255 255 / 0.88) 68%,
+    rgb(255 255 255 / 0.60) 78%,
+    rgb(255 255 255 / 0.30) 86%,
+    rgb(255 255 255 / 0.10) 92%,
+    transparent 98%
+  );
+  opacity: 0;
+  filter: blur(64px);
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.02);
+}
+
+.title-lightning {
+  position: absolute;
+  z-index: 5;
+  width: min(26vw, 220px);
+  height: min(48vh, 400px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.title-lightning svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px rgb(170 225 255 / 0.8));
+}
+
+.title-lightning.left {
+  top: 8%;
+  left: 6%;
+  transform: rotate(-8deg);
+}
+
+.title-lightning.right {
+  top: 10%;
+  right: 6%;
+  transform: rotate(10deg) scaleX(-1);
+}
+
+.title-lightning .bolt-glow {
+  fill: none;
+  stroke: rgb(170 225 255 / 0.78);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 18;
+}
+
+.title-lightning .bolt-main {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.98);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 7;
+}
+
+.title-lightning .bolt-branch {
+  fill: none;
+  stroke: rgb(230 247 255 / 0.92);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.title-meta {
+  position: absolute;
+  z-index: 6;
+  top: max(16px, env(safe-area-inset-top));
+  right: 0;
+  left: 0;
+  color: #f1dec1;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.65);
+}
+
+.title-license {
+  position: absolute;
+  z-index: 6;
+  right: 14px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 14px;
+  color: rgb(255 245 228 / 0.9);
+  font-size: 11px;
+  line-height: 1.45;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.75);
+}
+
+.title-license .right-note {
+  display: block;
+  opacity: 0.92;
+  text-align: right;
+}
+
+.title-prompt {
+  position: absolute;
+  z-index: 7;
+  bottom: max(72px, calc(env(safe-area-inset-bottom) + 72px));
+  left: 50%;
+  padding: 10px 18px;
+  border: 1px solid rgb(255 239 193 / 0.66);
+  border-radius: 999px;
+  color: #fff3c9;
+  background: rgb(13 16 22 / 0.36);
+  opacity: 0;
+  backdrop-filter: blur(3px);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  pointer-events: none;
+  text-shadow: 0 0 6px rgb(255 227 151 / 0.20), 0 1px 3px rgb(0 0 0 / 0.72);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.title-prompt .sub {
+  display: block;
+  margin-top: 4px;
+  color: #f6e8c4;
+  opacity: 0.82;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+.title-screen.ready {
+  cursor: pointer;
+}
+
+.title-screen.ready .title-prompt {
+  opacity: 0.35;
+  animation: title-prompt-firefly 2.7s ease-in-out infinite;
+}
+
+.title-screen.intro .title-whiteout {
+  animation: title-whiteout-flow 3.47s ease-in-out 2.90s forwards;
+}
+
+.title-screen.intro .title-logo {
+  animation: title-logo-reveal 0.55s cubic-bezier(0.18, 0.7, 0.2, 1) 5.80s forwards;
+}
+
+.title-screen.intro .title-lightning.left {
+  animation: title-lightning-burst 0.92s ease-out 0.20s 2;
+}
+
+.title-screen.intro .title-lightning.right {
+  animation: title-lightning-burst 0.88s ease-out 0.62s 2;
+}
+
+.title-screen.leaving {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+@keyframes title-whiteout-flow {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.02); }
+  11% { opacity: 0.03; transform: translate(-50%, -50%) scale(0.05); }
+  25% { opacity: 0.12; transform: translate(-50%, -50%) scale(0.11); }
+  42% { opacity: 0.30; transform: translate(-50%, -50%) scale(0.24); }
+  57% { opacity: 0.56; transform: translate(-50%, -50%) scale(0.48); }
+  70% { opacity: 0.84; transform: translate(-50%, -50%) scale(0.78); }
+  77% { opacity: 0.96; transform: translate(-50%, -50%) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, -50%) scale(1.10); }
+  92% { opacity: 1; transform: translate(-50%, -50%) scale(1.18); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.18); }
+}
+
+@keyframes title-logo-reveal {
+  0% {
+    opacity: 0;
+    filter: brightness(0.95) drop-shadow(0 4px 4px rgb(0 0 0 / 0.30));
+    transform: translateY(8px) scale(0.97);
+  }
+  30% { opacity: 0.10; }
+  65% {
+    opacity: 0.96;
+    filter: brightness(1.06) drop-shadow(0 0 12px rgb(255 243 188 / 0.22));
+    transform: translateY(0) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    filter: brightness(1) drop-shadow(0 4px 4px rgb(0 0 0 / 0.34));
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes title-lightning-burst {
+  0% { opacity: 0; filter: brightness(0.9); }
+  8% { opacity: 1; filter: brightness(1.55); }
+  16% { opacity: 0.22; }
+  28% { opacity: 0.96; filter: brightness(1.35); }
+  42% { opacity: 0.14; }
+  55% { opacity: 0.82; }
+  72% { opacity: 0.20; }
+  100% { opacity: 0; filter: brightness(0.95); }
+}
+
+@keyframes title-prompt-firefly {
+  0% { opacity: 0.28; transform: translateX(-50%) scale(0.995); }
+  34% { opacity: 0.68; }
+  48% { opacity: 0.92; transform: translateX(-50%) scale(1.008); }
+  78% { opacity: 0.82; }
+  100% { opacity: 0.30; transform: translateX(-50%) scale(0.995); }
+}
+
 button {
   font: inherit;
 }
@@ -1074,6 +1349,218 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
+}
+
+.battle-result-effect-host {
+  position: fixed;
+  z-index: 94;
+  inset: 0;
+  pointer-events: none;
+}
+
+.battle-result-effect {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  isolation: isolate;
+  pointer-events: auto;
+  touch-action: none;
+  transition: opacity 420ms ease-in;
+  user-select: none;
+}
+
+.battle-result-layer {
+  position: absolute;
+  display: block;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.battle-result-shade {
+  z-index: 1;
+  inset: 0;
+  background: rgb(0 0 0 / 0.55);
+  opacity: 1;
+}
+
+.victory-effect-army,
+.defeat-effect-army {
+  z-index: 2;
+  bottom: 0;
+  left: 50%;
+  width: min(152vw, 142dvh);
+  height: auto;
+  opacity: 0;
+  transform-origin: 50% 100%;
+  transition: opacity 5000ms linear, transform 5000ms ease-out;
+}
+
+.victory-effect-army {
+  filter: brightness(0.93) saturate(0.92);
+  transform: translate3d(-50%, 4%, 0) scale(0.985);
+}
+
+.victory-effect.is-army-visible .victory-effect-army {
+  opacity: 0.86;
+  transform: translate3d(-50%, 0, 0) scale(1);
+}
+
+.defeat-effect-army {
+  filter: brightness(0.82) saturate(0.78);
+  transform: translate3d(-50%, 4%, 0) scale(0.656667);
+}
+
+.defeat-effect.is-army-visible .defeat-effect-army {
+  opacity: 0.86;
+  transform: translate3d(-50%, 0, 0) scale(0.666667);
+}
+
+.victory-effect-title,
+.defeat-effect-title {
+  z-index: 3;
+  top: 48%;
+  left: 50%;
+  width: min(88vw, 600px);
+  height: auto;
+  opacity: 0;
+  transition: opacity 5000ms linear;
+}
+
+.victory-effect-title {
+  filter:
+    drop-shadow(0 5px 8px rgb(50 23 0 / 0.72))
+    drop-shadow(0 0 12px rgb(255 191 45 / 0.24));
+  transform: translate(-50%, -50%);
+}
+
+.victory-effect.is-title-visible .victory-effect-title {
+  opacity: 1;
+}
+
+.defeat-effect-title {
+  filter:
+    brightness(0.90)
+    saturate(0.90)
+    drop-shadow(0 5px 8px rgb(0 14 42 / 0.76))
+    drop-shadow(0 0 12px rgb(104 178 255 / 0.22));
+  transform: translate(-50%, -50%) scale(0.666667);
+}
+
+.defeat-effect.is-title-visible .defeat-effect-title {
+  opacity: 0.96;
+}
+
+.victory-effect-rays {
+  z-index: 4;
+  top: -2%;
+  right: -3%;
+  width: min(148vw, 900px);
+  height: auto;
+  opacity: 0;
+  filter: brightness(0.94) saturate(0.90);
+  transition: opacity 3000ms linear;
+}
+
+.victory-effect.is-rays-visible .victory-effect-rays {
+  opacity: 0.44;
+}
+
+.battle-result-prompt {
+  position: absolute;
+  z-index: 5;
+  bottom: max(22px, calc(env(safe-area-inset-bottom) + 14px));
+  left: 50%;
+  padding: 8px 16px;
+  border: 1px solid rgb(255 224 150 / 0.58);
+  border-radius: 999px;
+  color: #fff4d2;
+  background: rgb(20 13 7 / 0.58);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.42);
+  opacity: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 300ms ease-out;
+  white-space: nowrap;
+}
+
+.battle-result-effect.is-ready {
+  cursor: pointer;
+}
+
+.battle-result-effect.is-ready .battle-result-prompt {
+  opacity: 0.92;
+}
+
+.battle-result-effect.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.game-result-overlay {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(16 13 9 / 0.84);
+  backdrop-filter: blur(5px);
+}
+
+.game-result-card {
+  width: min(94vw, 32rem);
+  border: 2px solid #83683f;
+  border-radius: 1.25rem;
+  padding: 1.4rem;
+  color: #20170e;
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.6), transparent 45%), #fff6e4;
+  box-shadow: 0 18px 50px rgb(20 13 8 / 0.45);
+  text-align: center;
+}
+
+.game-result-card h2 {
+  margin: 0 0 0.5rem;
+  color: #442d14;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+}
+
+.game-result-message {
+  margin: 0.7rem 0;
+  font-weight: 800;
+}
+
+.game-result-details {
+  margin: 0 0 1rem;
+  color: #675a47;
+  font-size: 0.88rem;
+}
+
+.game-result-card .primary-button {
+  width: 100%;
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .victory-effect-title,
+  .defeat-effect-title {
+    top: 47%;
+    width: min(62vw, 72vh);
+  }
+
+  .victory-effect-army,
+  .defeat-effect-army {
+    width: min(112vw, 146vh);
+  }
+
+  .victory-effect-rays {
+    width: min(92vw, 138vh);
+  }
 }
 
 .secondary-button {

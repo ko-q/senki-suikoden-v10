@@ -124,8 +124,22 @@ python3 -m http.server 4173
 
 ## GitHub Pages
 
-新規Repository `senki-suikoden-v10` のrootへこの内容を置き、GitHub Pagesのsourceを
-`main` branchの`/(root)`に設定できます。v9とは別Repositoryなので、公開URLと保存領域を分離できます。
+公開URL: https://ko-q.github.io/senki-suikoden-v10/
+
+初回のみRepositoryの **Settings → Pages → Build and deployment → Source** を
+**GitHub Actions** に設定します。その後、**Actions → Deploy GitHub Pages → Run workflow**
+で`main`を選んで実行すると公開できます。
+
+以後は`main`へのpushで`.github/workflows/pages.yml`が自動実行されます。
+Node.js 22で既存testとentry moduleの構文確認に成功した場合だけ、既存の`index.html`と
+`src/`・`styles/`・`assets/`を公開します。build toolや追加dependencyは不要です。
+設計資料とtestは公開artifactに含めません。
+
+スマートフォンでも上記URLを開き、初回tapでtitle openingを開始し、表示完了後にもう一度
+tapすると試験用Battleへ進めます。現在はMilestone 13の開発版であり、正式な全章版ではありません。
+
+v9とは別URLです。同じ`ko-q.github.io`内ではlocalStorageのoriginは共有されますが、
+既存のv10専用保存prefixによってv9の保存keyと分離します。
 
 ## 固定した互換境界
 

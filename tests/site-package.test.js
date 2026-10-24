@@ -13,15 +13,20 @@ test("the release contains the nine-chapter player entry, maps and portraits, wi
   const manifest = await buildSite(root);
   assert.equal(manifest.version, GAME_VERSION);
   assert.equal(manifest.chapters.length, 9);
-  assert.equal(manifest.files.filter((file) => file.path.startsWith("assets/maps/")).length, 9);
-  assert.equal(manifest.files.filter((file) => file.path.startsWith("assets/portraits/")).length, 166);
-  assert.ok(manifest.files.every((file) => !/^(docs|tests|scripts|test-support|\.git)\//.test(file.path)));
+  assert.equal(manifest.files.filter((file) => file.path.startsWith(`${manifest.assetBase}/assets/maps/`)).length, 9);
+  assert.equal(manifest.files.filter((file) => file.path.startsWith(`${manifest.assetBase}/assets/portraits/`)).length, 166);
+  assert.ok(manifest.files.every((file) => file.path === "index.html" || file.path === ".nojekyll" ||
+    ["src", "styles", "assets"].some((directory) => file.path.startsWith(`${manifest.assetBase}/${directory}/`))));
+  const html = await readFile(path.join(root, "index.html"), "utf8");
+  assert.ok(html.includes(`src="./${manifest.assetBase}/src/app/bootstrap.js"`));
+  assert.ok(html.includes(`href="./${manifest.assetBase}/styles/player-interface.css"`));
+  assert.ok(!html.includes('src="./src/app/bootstrap.js"'));
   assert.equal((await verifySite(root)).files.length, manifest.files.length);
 
   await assert.rejects(buildSite(root), { code: "EEXIST" });
   assert.equal((await verifySite(root)).version, GAME_VERSION, "an existing release is left intact");
 
-  const portrait = manifest.files.find((file) => file.path.startsWith("assets/portraits/"));
+  const portrait = manifest.files.find((file) => file.path.startsWith(`${manifest.assetBase}/assets/portraits/`));
   const portraitPath = path.join(root, portrait.path);
   const original = await readFile(portraitPath);
   const corrupt = Buffer.from(original); corrupt[0] ^= 1;

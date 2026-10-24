@@ -14,6 +14,7 @@ import {
 import { Stage, StagePhase } from "../domain/stage.js";
 import { Facing, UnitActionState } from "../domain/unit.js";
 import { BattleEffectManager } from "./battle-effect-manager.js";
+import { MovePreviewState } from "./move-preview-state.js";
 import { BattleRenderer } from "./battle-renderer.js";
 import { DialogueController } from "./dialogue-controller.js";
 import { directionBetween } from "../services/action-targeting-rules.js";
@@ -70,9 +71,7 @@ export class BattleScreen {
   #inspectedPosition = null;
   #presentationUnitId = null;
   #reachableByKey;
-  #previewDestination;
-  #candidatePaths;
-  #selectedPathIndex;
+  #preview = new MovePreviewState();
   #availableActions;
   #selectedActionType;
   #selectableTargets;
@@ -100,9 +99,7 @@ export class BattleScreen {
     this.#mode = InteractionMode.UNIT_SELECT;
     this.#selectedUnit = null;
     this.#reachableByKey = new Map();
-    this.#previewDestination = null;
-    this.#candidatePaths = [];
-    this.#selectedPathIndex = 0;
+    this.#preview.clear();
     this.#availableActions = [];
     this.#selectedActionType = null;
     this.#selectableTargets = [];
@@ -198,7 +195,7 @@ export class BattleScreen {
     }
     // Preview stays in the presentation layer until a final command commits it.
     if (this.#selectedUnit !== null && [InteractionMode.WAIT_FACING_SELECT, InteractionMode.TACTIC_FACING_SELECT, InteractionMode.MOVE_PREVIEW].includes(this.#mode)) {
-      const origin = this.#previewDestination ?? this.#stage.map.getPosition(this.#selectedUnit);
+      const origin = this.#preview.destination ?? this.#stage.map.getPosition(this.#selectedUnit);
       const dx = position.x - origin.x, dy = position.y - origin.y;
       const normalAttack = this.#mode === InteractionMode.MOVE_PREVIEW && this.#selectableTargets.includes(cell.occupant);
       if (!normalAttack && Math.abs(dx) + Math.abs(dy) === 1) {
@@ -254,7 +251,7 @@ export class BattleScreen {
 
     const origin = this.#stage.map.getPosition(this.#selectedUnit);
     if (origin.equals(position)) {
-      if (this.#previewDestination !== null) {
+      if (this.#preview.destination !== null) {
         this.#clearPreview();
       } else {
         this.#clearSelection();
@@ -291,7 +288,7 @@ export class BattleScreen {
       return;
     }
     // V9 cancels an uncommitted move in one step from every submode.
-    if (this.#previewDestination !== null || this.#mode === InteractionMode.WAIT_FACING_SELECT) {
+    if (this.#preview.destination !== null || this.#mode === InteractionMode.WAIT_FACING_SELECT) {
       this.#clearPreview();
     } else if ([InteractionMode.CONFUSION_LV1_TARGET_SELECT, InteractionMode.CONFUSION_LV2_TARGET_SELECT,
       InteractionMode.CONFUSION_LV3_TARGET_SELECT].includes(this.#mode)) {
@@ -313,11 +310,11 @@ export class BattleScreen {
     if (
       this.#isInputLocked()
       || !this.#isBaseSelectionMode()
-      || this.#candidatePaths.length <= 1
+      || this.#preview.paths.length <= 1
     ) {
       return;
     }
-    this.#selectedPathIndex = (this.#selectedPathIndex + 1) % this.#candidatePaths.length;
+    this.#preview.nextPath();
     this.#refreshActionQuery();
     this.refresh();
   }
@@ -436,20 +433,13 @@ export class BattleScreen {
       this.#commandPort.getReachableCells(unit)
         .map((entry) => [entry.position.toKey(), entry.cost])
     );
-    this.#previewDestination = null;
-    this.#candidatePaths = [];
-    this.#selectedPathIndex = 0;
+    this.#preview.clear();
     this.#mode = InteractionMode.UNIT_SELECTED;
     this.#refreshActionQuery();
   }
 
   #previewAt(position) {
-    this.#previewDestination = position;
-    this.#candidatePaths = this.#commandPort.getCandidatePaths(
-      this.#selectedUnit,
-      position
-    );
-    this.#selectedPathIndex = 0;
+    this.#preview.set(position, this.#commandPort.getCandidatePaths(this.#selectedUnit, position));
     this.#mode = InteractionMode.MOVE_PREVIEW;
     this.#refreshActionQuery();
   }
@@ -514,7 +504,7 @@ export class BattleScreen {
       this.#selectableTargets = [];
       return;
     }
-    const origin = this.#previewDestination
+    const origin = this.#preview.destination
       ?? this.#stage.map.getPosition(this.#selectedUnit);
     const context = createActionQueryContext(this.#selectedUnit, origin);
     this.#availableActions = [...this.#commandPort.getAvailableActions(context)];
@@ -530,7 +520,7 @@ export class BattleScreen {
       this.#selectableTargets = [];
       return;
     }
-    const origin = this.#previewDestination
+    const origin = this.#preview.destination
       ?? this.#stage.map.getPosition(this.#selectedUnit);
     const context = createActionQueryContext(this.#selectedUnit, origin);
     this.#selectableTargets = [...this.#commandPort.getActionTargets(
@@ -540,15 +530,13 @@ export class BattleScreen {
   }
 
   #clearPreview() {
-    this.#previewDestination = null;
-    this.#candidatePaths = [];
-    this.#selectedPathIndex = 0;
+    this.#preview.clear();
     this.#mode = InteractionMode.UNIT_SELECTED;
     this.#refreshActionQuery();
   }
 
   #returnToBaseSelection() {
-    this.#mode = this.#previewDestination === null
+    this.#mode = this.#preview.destination === null
       ? InteractionMode.UNIT_SELECTED
       : InteractionMode.MOVE_PREVIEW;
     this.#refreshActionQuery();
@@ -559,9 +547,7 @@ export class BattleScreen {
     this.#inspectedPosition = null;
     this.#selectedUnit = null;
     this.#reachableByKey = new Map();
-    this.#previewDestination = null;
-    this.#candidatePaths = [];
-    this.#selectedPathIndex = 0;
+    this.#preview.clear();
     this.#availableActions = [];
     this.#selectedActionType = null;
     this.#selectableTargets = [];
@@ -569,7 +555,7 @@ export class BattleScreen {
   }
 
   #selectedPath() {
-    return this.#candidatePaths[this.#selectedPathIndex] ?? [];
+    return this.#preview.path;
   }
 
   #isSelectablePlayerUnit(unit) {
@@ -604,7 +590,7 @@ export class BattleScreen {
       || this.#stage.phase !== StagePhase.PLAYER
       || this.#mode === InteractionMode.TACTIC_FACING_SELECT
       || this.#mode === InteractionMode.WAIT_FACING_SELECT
-      || this.#previewDestination !== null
+      || this.#preview.destination !== null
     ) {
       return false;
     }
@@ -648,9 +634,7 @@ export class BattleScreen {
     ) {
       this.#selectedUnit = committed[0];
       this.#reachableByKey = new Map();
-      this.#previewDestination = null;
-      this.#candidatePaths = [];
-      this.#selectedPathIndex = 0;
+      this.#preview.clear();
       this.#availableActions = [];
       this.#selectedActionType = null;
       this.#selectableTargets = [];
@@ -693,7 +677,7 @@ export class BattleScreen {
       && this.#commandPort.getBattleResult() === null
       ? this.#stage.map.getPosition(actingUnit) : null;
     const path = this.#selectedPath();
-    const previewFacing = !inputLocked && this.#previewDestination && path.length > 0
+    const previewFacing = !inputLocked && this.#preview.destination && path.length > 0
       ? directionBetween(path.at(-2) ?? this.#stage.map.getPosition(this.#selectedUnit), path.at(-1))
       : null;
     return Object.freeze({
@@ -703,19 +687,19 @@ export class BattleScreen {
       instruction: this.#instruction(),
       selectedUnit: this.#selectedUnit ?? this.#inspectedUnit,
       presentationPosition,
-      selectionPosition: this.#previewDestination
+      selectionPosition: this.#preview.destination
         ?? ((this.#selectedUnit ?? this.#inspectedUnit) ? this.#stage.map.getPosition(this.#selectedUnit ?? this.#inspectedUnit) : this.#inspectedPosition),
       reachableByKey: this.#reachableByKey,
-      previewDestination: this.#previewDestination,
+      previewDestination: this.#preview.destination,
       previewFacing,
-      candidatePaths: this.#candidatePaths,
-      selectedPathIndex: this.#selectedPathIndex,
+      candidatePaths: this.#preview.paths,
+      selectedPathIndex: this.#preview.index,
       availableActions: Object.freeze([...this.#availableActions]),
       selectedActionType: this.#selectedActionType,
       selectableTargets: this.#selectableTargets,
-      previewCost: this.#previewDestination === null
+      previewCost: this.#preview.destination === null
         ? 0
-        : this.#reachableByKey.get(this.#previewDestination.toKey()) ?? 0,
+        : this.#reachableByKey.get(this.#preview.destination.toKey()) ?? 0,
       inputLocked,
       canWait: this.#canWait(),
       canEndTurn: this.#canEndTurn(),

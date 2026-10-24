@@ -86,6 +86,9 @@ button:disabled{opacity:.55;cursor:default}
 .info-overlay .player-card h2{font-size:20px;margin:0 0 12px}
 .battle-info-body[data-kind="guide"]{max-height:60dvh;overflow:auto;font-size:13px;line-height:1.65}
 .battle-info-body h3{font-size:15px;margin:16px 0 6px;color:#49341b}.battle-info-body p{margin:6px 0 12px}
+.keyboard-hint{font-size:12px;color:#705c40;margin:10px 0}
+button:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid #17799f;outline-offset:3px}
+@media(hover:none){.keyboard-hint{display:none}}
 @media(max-width:400px){.unit-detail-card{padding:12px}.unit-detail-head{grid-template-columns:110px 1fr;gap:10px}.unit-detail-portrait{width:110px;height:145px}.unit-detail-line{font-size:12px}.unit-detail-name{font-size:23px}}
 
 /* V9 selection feedback: ready ally, finished ally, enemy/empty cell. */

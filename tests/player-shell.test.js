@@ -21,6 +21,8 @@ test("V9 information opens by tap, closes on text taps, preserves action buttons
     shell.attachSession(session);
     buttons.stageInfoButton.dispatch("pointerdown"); assert.equal(elements.battleInfoOverlay.hidden, true);
     buttons.stageInfoButton.dispatch("click"); assert.equal(elements.battleInfoOverlay.hidden, false);
+    assert.equal(elements.battleHost.inert, true);
+    assert.equal(elements.closeBattleInfoButton.focusCount, 1);
     assert.match(elements.battleInfoBody.textContent, /護送隊殲滅/);
     assert.match(elements.battleInfoBody.textContent, /護送部隊殲滅まで残り5ターン/);
     assert.equal(buttons.stageInfoButton.attributes.get("aria-expanded"), "true");
@@ -28,15 +30,24 @@ test("V9 information opens by tap, closes on text taps, preserves action buttons
     assert.equal(elements.battleInfoOverlay.hidden, false);
     elements.battleInfoOverlay.dispatch("click", { target: elements.battleInfoBody });
     assert.equal(elements.battleInfoOverlay.hidden, true);
+    assert.equal(elements.battleHost.inert, false);
     assert.equal(buttons.stageInfoButton.attributes.get("aria-expanded"), "false");
     buttons.stageInfoButton.dispatch("click"); elements.openSaveButton.dispatch("click");
     assert.equal(elements.battleInfoOverlay.hidden, true); assert.equal(elements.saveSlotOverlay.hidden, false); assert.equal(refreshes, 1);
+    assert.equal(elements.battleHost.inert, true);
+    assert.equal(elements.stageSelectOverlay.inert, true);
+    elements.saveSlotOverlay.dispatch("keydown", { key: "Escape" });
+    assert.equal(elements.saveSlotOverlay.hidden, true);
+    assert.equal(elements.battleHost.inert, false);
     shell.attachSession(session); stage.phase = "ENEMY";
     buttons.battleStatusButton.dispatch("click"); assert.equal(elements.battleInfoOverlay.hidden, true);
     stage.phase = "PLAYER"; controller.flowState = "TURN_TRANSITION";
     buttons.battleStatusButton.dispatch("click"); assert.equal(elements.battleInfoOverlay.hidden, true);
     controller.flowState = "IDLE"; buttons.battleStatusButton.dispatch("click");
     assert.equal(elements.battleInfoBody.textContent, "味方ターン 1");
+    elements.battleInfoOverlay.dispatch("keydown", { key: "Escape" });
+    assert.equal(elements.battleInfoOverlay.hidden, true);
+    assert.equal(buttons.battleStatusButton.attributes.get("aria-expanded"), "false");
     raidComplete = true; shell.attachSession(session); buttons.stageInfoButton.dispatch("click");
     assert.match(elements.battleInfoBody.textContent, /晁蓋が北端の旗へ到達/);
     assert.doesNotMatch(elements.battleInfoBody.textContent, /期限超過/);
@@ -46,5 +57,7 @@ test("V9 information opens by tap, closes on text taps, preserves action buttons
     assert.match(elements.battleInfoBody.textContent, /護送部隊殲滅まで残り1ターン/);
     shell.dispose(); assert.equal(elements.battleInfoOverlay.hidden, true);
     assert.equal(buttons.battleStatusButton.listeners.size, 0);
+    assert.equal(elements.battleHost.inert, false);
+    assert.equal(elements.stageSelectOverlay.inert, false);
   } finally { shell.dispose(); restore(); }
 });

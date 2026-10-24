@@ -87,7 +87,7 @@
                   <button id="facingNorthButton" type="button">北</button><button id="facingEastButton" type="button">東</button><button id="facingSouthButton" type="button">南</button><button id="facingWestButton" type="button">西</button>
                 </div>
               </div>
-              <div class="command-footer"><button id="resetButton" type="button">戻る</button><p id="instructionText" class="instruction"></p><button id="pathButton" type="button" hidden>経路</button></div>
+              <div class="command-footer"><button id="resetButton" type="button" title="戻る（Esc）" aria-keyshortcuts="Escape">戻る</button><p id="instructionText" class="instruction"></p><button id="pathButton" type="button" hidden>経路</button></div>
               <p id="pathSummary" hidden></p>
             </div>
             <div id="boardScroll" class="board-scroll">
@@ -123,9 +123,10 @@
     </section>
     <section id="battleInfoOverlay" class="player-overlay info-overlay" hidden>
       <div class="player-card" role="dialog" aria-modal="true" aria-labelledby="battleInfoTitle">
-        <h2 id="battleInfoTitle"></h2><div id="battleInfoBody" class="battle-info-body"></div>
+        <h2 id="battleInfoTitle"></h2><div id="battleInfoBody" class="battle-info-body" tabindex="0" aria-labelledby="battleInfoTitle"></div>
         <div id="stageInfoActions" class="stage-info-actions"><button id="audioButton" type="button" aria-pressed="false">音声：開始</button><button id="openSaveButton" type="button">セーブ選択</button><button id="openLoadButton" type="button">ロード選択</button><button id="returnStageSelectButton" type="button">ステージ選択</button></div>
-        <button id="closeBattleInfoButton" type="button">閉じる</button>
+        <p class="keyboard-hint">PC：Escで閉じる／盤面では「戻る」</p>
+        <button id="closeBattleInfoButton" type="button" aria-keyshortcuts="Escape">閉じる</button>
       </div>
     </section>
     <section id="resultOverlay" class="game-result-overlay" aria-hidden="true" hidden><div class="game-result-card player-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><h2 id="resultTitle">戦闘結果</h2><p id="resultMessage"></p><p id="resultDetails"></p><button id="resultNextBattleButton" type="button" hidden>次のステージ</button><button id="resultNewBattleButton" type="button">ステージ選択</button></div></section>

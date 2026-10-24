@@ -12,6 +12,7 @@ import { BattleMapView } from "./battle-map-view.js";
 import { SelectionRingView } from "./selection-ring-view.js";
 import { TerrainInfoView, TERRAIN_NAMES } from "./terrain-info-view.js";
 import { BoardViewportLayout } from "./board-viewport-layout.js";
+import { BattleKeyboardControls } from "./battle-keyboard-controls.js";
 
 const TACTIC_BUTTONS = Object.freeze([
   Object.freeze({ key: "confusionLv1Button", type: ActionType.CONFUSION_LV1 }),
@@ -114,10 +115,14 @@ export class BattleRenderer {
   #viewportLayout;
   #openingPositioned = false;
   #visibleSelectionKey = null;
+  #keyboard;
+  #keyboardTarget;
   #detail; #gesture; #gestureBindings = []; #unitInfoBindings = []; #currentStage; #currentView;
 
-  constructor(elements) {
+  constructor(elements, { keyboardTarget = globalThis.document } = {}) {
     this.#elements = requireElements(elements);
+    // A cloned template still belongs to an inert document before activation.
+    this.#keyboardTarget = keyboardTarget;
     this.#handlers = null;
     this.#handlersBound = false;
     this.#eventBindings = [];
@@ -168,6 +173,13 @@ export class BattleRenderer {
       onWait
     };
     this.#handlersBound = true;
+    this.#keyboard = new BattleKeyboardControls({
+      target: this.#keyboardTarget,
+      root: this.#elements.board.closest?.("[data-battle-view-root]") ?? this.#elements.board,
+      canGoBack: () => this.#handlersBound && this.#currentView && !this.#currentView.inputLocked
+        && !this.#elements.resetButton.disabled && !this.#detail?.isOpen,
+      onBack: () => this.#handlers?.onClear()
+    });
     this.#detail = new UnitDetailView(this.#elements.unitDetailOverlay);
     this.#gesture = new LongPressGesture({
       canOpen: () => this.#handlersBound && this.#currentStage?.phase === "PLAYER" && !this.#currentView?.inputLocked && !this.#detail.isOpen,
@@ -234,6 +246,7 @@ export class BattleRenderer {
       return;
     }
     this.#clearBoardBindings();
+    this.#keyboard?.dispose();
     for (const dispose of this.#unitInfoBindings) dispose();
     this.#unitInfoBindings = []; this.#gesture.cancel(); this.#detail.dispose();
     for (const binding of this.#eventBindings) {

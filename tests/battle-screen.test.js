@@ -36,6 +36,7 @@ import { StatusService } from "../src/services/status-service.js";
 import { TacticService } from "../src/services/tactic-service.js";
 import { createStageDigest } from "../test-support/fixtures.js";
 import {
+  FakeElement,
   createFakeBattleElements,
   installFakeDocument
 } from "../test-support/fake-battle-dom.js";
@@ -50,9 +51,9 @@ const ZERO_EFFECT_DURATIONS = Object.freeze(Object.fromEntries(
     .map((type) => [type, 0])
 ));
 
-function createScreenRuntime(stage, { visualSession = null } = {}) {
+function createScreenRuntime(stage, { visualSession = null, keyboardTarget = null } = {}) {
   const elements = createFakeBattleElements();
-  const renderer = new BattleRenderer(elements);
+  const renderer = new BattleRenderer(elements, keyboardTarget ? { keyboardTarget } : {});
   const effectManager = new BattleEffectManager({
     renderer,
     visualSession,
@@ -1342,7 +1343,8 @@ test("BattleScreen commits Confusion Lv2 then requires final tactic facing", asy
         }
       ]
     });
-    const runtime = createScreenRuntime(stage);
+    const keyboardTarget = new FakeElement();
+    const runtime = createScreenRuntime(stage, { keyboardTarget });
     const completion = runtime.controller.startNewBattle();
     await waitUntil(
       () => isRenderedMode(runtime, InteractionMode.UNIT_SELECT),
@@ -1364,6 +1366,7 @@ test("BattleScreen commits Confusion Lv2 then requires final tactic facing", asy
     assert.equal(stage.getUnit("target").getStatusTurns(UnitStatus.CONFUSED) > 0, true);
     assert.equal(runtime.elements.resetButton.disabled, true);
     const committed = createStageDigest(stage), committedRandom = runtime.battleRandom.exportState();
+    keyboardTarget.dispatch("keydown", { key: "Escape" });
     runtime.elements.resetButton.dispatch("click");
     assert.equal(runtime.screen.mode, InteractionMode.TACTIC_FACING_SELECT);
     assert.equal(createStageDigest(stage), committed);
@@ -1628,7 +1631,7 @@ test("selection rings follow preview and completion; empty terrain inspection st
  } finally {runtime.screen.dispose();runtime.controller.dispose();await assert.rejects(completion,{name:"AbortError"});restore();}
 });
 
-test("one Back cancels a V9 movement preview from every uncommitted command without spending state", async () => {
+for (const input of ["button", "Escape"]) test(`one ${input} cancels a V9 movement preview from every uncommitted command without spending state`, async () => {
   const restore = installFakeDocument();
   const stage = createServiceStage({ id: "v9_cancel_submodes", map: Array.from({ length: 4 }, () => Array(5).fill("plain")),
     units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 2 }, facing: Facing.SOUTH,
@@ -1638,7 +1641,9 @@ test("one Back cancels a V9 movement preview from every uncommitted command with
       { id: "ally", army: Affiliation.PLAYER, position: { x: 0, y: 0 } },
       { id: "near", army: Affiliation.ENEMY, position: { x: 3, y: 2 } },
       { id: "far", army: Affiliation.ENEMY, position: { x: 4, y: 2 } }] });
-  const runtime = createScreenRuntime(stage), completion = runtime.controller.startNewBattle();
+  const keyboardTarget = new FakeElement();
+  const runtime = createScreenRuntime(stage, { keyboardTarget }), completion = runtime.controller.startNewBattle();
+  const back = () => input === "Escape" ? keyboardTarget.dispatch("keydown", { key: "Escape" }) : runtime.elements.resetButton.dispatch("click");
   const cell = (x, y) => runtime.elements.board.children[y * 5 + x];
   const token = (x, y) => cell(x, y).children.find((child) => child.dataset.unitId === "actor");
   const cases = [
@@ -1664,8 +1669,10 @@ test("one Back cancels a V9 movement preview from every uncommitted command with
       cell(0, 0).dispatch("click"); // Another ally cannot discard a pending preview.
       assert.equal(runtime.screen.mode, mode);
       assert.ok(token(2, 2)); assert.equal(token(0, 2), undefined);
-      runtime.elements.resetButton.dispatch("click");
+      back();
       assert.equal(runtime.screen.mode, InteractionMode.UNIT_SELECTED);
+      keyboardTarget.dispatch("keydown", { key: "Escape", repeat: true });
+      assert.equal(runtime.screen.mode, InteractionMode.UNIT_SELECTED, "held Escape cannot clear the remaining selection");
       assert.ok(token(0, 2)); assert.equal(token(2, 2), undefined);
       assert.equal(token(0, 2).children.find((child) => child.className === "unit-facing").dataset.facing, Facing.SOUTH);
       assert.equal(runtime.elements.actionPanel.hidden, false);
@@ -1673,7 +1680,7 @@ test("one Back cancels a V9 movement preview from every uncommitted command with
       assert.equal(cell(1, 2).classList.has("is-reachable"), true);
       assert.equal(createStageDigest(stage), before); assert.deepEqual(runtime.battleRandom.exportState(), randomBefore);
       assert.deepEqual(stage.battleLog.getEntries(), logsBefore);
-      runtime.elements.resetButton.dispatch("click");
+      back();
       assert.equal(runtime.screen.mode, InteractionMode.UNIT_SELECT);
     }
   } finally { runtime.screen.dispose(); runtime.controller.dispose(); await assert.rejects(completion, { name: "AbortError" }); restore(); }

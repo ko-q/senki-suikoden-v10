@@ -1,20 +1,27 @@
 import { renderStrategyGuide } from "./strategy-guide.js";
 import { StageSelectionScreen } from "./stage-selection-screen.js";
 import { formatV9ObjectiveText } from "../definitions/v9-objective-text.js";
+import { ModalFocus } from "./modal-focus.js";
 
 /** Owns navigation overlays; battle rules and session replacement stay in Game. */
 export class PlayerShell {
   #elements; #stages; #game; #menu; #bindings = []; #battleBindings = [];
   #activeInfoButton = null;
+  #infoFocus; #slotsFocus;
   constructor({ elements, stages, game }) {
     this.#elements = elements; this.#stages = stages; this.#game = game;
+    const blockedRoots = [elements.battleHost, elements.stageSelectOverlay];
+    this.#infoFocus = new ModalFocus({ root: elements.battleInfoOverlay,
+      initialFocus: elements.closeBattleInfoButton, blockedRoots, onEscape: () => this.#hideInfo() });
+    this.#slotsFocus = new ModalFocus({ root: elements.saveSlotOverlay,
+      initialFocus: elements.closeSaveSlotsButton, blockedRoots, onEscape: () => this.#hideSlots() });
     this.#menu = new StageSelectionScreen({ root: elements.stageSelectOverlay,
       list: elements.stageList, loadButton: elements.stageSelectLoadButton, stages,
       onSelect: (stageId) => {
         const replacement = game.startNewBattle({ stageId });
         if (!replacement) this.openSlots();
       }, onLoad: () => this.openSlots() });
-    this.#listen(elements.closeSaveSlotsButton, () => { elements.saveSlotOverlay.hidden = true; });
+    this.#listen(elements.closeSaveSlotsButton, () => this.#hideSlots());
     this.#listen(elements.battleInfoOverlay, (event) => {
       // V9.5.6+: tap to open; ordinary action buttons stay usable inside the overlay.
       if (!event.target.closest?.("button")) this.#hideInfo();
@@ -25,23 +32,26 @@ export class PlayerShell {
     this.#listen(elements.returnStageSelectButton, () => this.showStageSelection());
   }
   showStageSelection() {
-    this.#elements.saveSlotOverlay.hidden = true;
-    this.#hideInfo();
+    this.#hideSlots(false);
+    this.#hideInfo(false);
     this.#elements.battleHost.hidden = true;
     this.#menu.show();
   }
   openSlots(mode = "load") {
-    this.#hideInfo();
+    // Return to the original toolbar/menu, never a hidden button in the info card.
+    const returnFocus = this.#activeInfoButton ?? this.#elements.stageSelectLoadButton;
+    this.#hideInfo(false);
     this.#game.refreshManualSlots(false);
     this.#elements.persistenceTitle.textContent = mode === "save" ? "セーブ選択" : "ロード選択";
     this.#elements.saveSlotOverlay.dataset.mode = mode;
     this.#elements.saveSlotOverlay.hidden = false;
+    this.#slotsFocus.activate(returnFocus);
   }
   attachSession(session) {
     this.#menu.hide();
     this.#elements.battleHost.hidden = false;
-    this.#elements.saveSlotOverlay.hidden = true;
-    this.#hideInfo();
+    this.#hideSlots(false);
+    this.#hideInfo(false);
     for (const [element, listener] of this.#battleBindings) element.removeEventListener("click", listener);
     this.#battleBindings = [];
     const source = this.#stages.find((stage) => stage.id === session.stage.id);
@@ -79,15 +89,23 @@ export class PlayerShell {
       renderStrategyGuide(battleInfoBody);
     }
     battleInfoOverlay.hidden = false;
-    if (kind === "status") battleInfoBody.scrollTop = battleInfoBody.scrollHeight;
+    battleInfoBody.scrollTop = kind === "status" ? battleInfoBody.scrollHeight : 0;
+    this.#infoFocus.activate(this.#activeInfoButton);
   }
   #listen(element, listener) { element.addEventListener("click", listener); this.#bindings.push([element, listener]); }
-  #hideInfo() {
+  #hideInfo(restoreFocus = true) {
     this.#elements.battleInfoOverlay.hidden = true;
+    this.#infoFocus.deactivate({ restoreFocus });
     this.#activeInfoButton?.setAttribute("aria-expanded", "false"); this.#activeInfoButton = null;
   }
+  #hideSlots(restoreFocus = true) {
+    this.#elements.saveSlotOverlay.hidden = true;
+    this.#slotsFocus.deactivate({ restoreFocus });
+  }
   dispose() {
-    this.#hideInfo();
+    this.#hideSlots(false);
+    this.#hideInfo(false);
+    this.#infoFocus.dispose(); this.#slotsFocus.dispose();
     this.#menu.dispose();
     for (const [element, listener] of [...this.#bindings, ...this.#battleBindings]) element.removeEventListener("click", listener);
     this.#bindings = []; this.#battleBindings = [];

@@ -4,3 +4,4 @@ coverage/
 *.log
 _site/
 _site-publish/
+_site-dev*/

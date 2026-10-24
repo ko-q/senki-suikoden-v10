@@ -86,6 +86,8 @@ test("a Battle audio session owns and stops its transient sources", async () => 
     actionType: ActionType.BOW_ATTACK,
     actorId: "enemy",
     targetId: "player",
+    actorPosition: { x: 0, y: 0 },
+    targetPosition: { x: 0, y: 2 },
     actorAffiliation: Affiliation.ENEMY,
     actorIsMob: true,
     forced: false
@@ -111,6 +113,8 @@ test("wide illusion schedules its start cue and cast cue at the v9 visual bounda
     actionType: ActionType.WIDE_ILLUSION,
     actorId: "enemy",
     targetId: "enemy",
+    actorPosition: { x: 0, y: 0 },
+    targetPosition: { x: 0, y: 0 },
     actorAffiliation: Affiliation.ENEMY,
     actorIsMob: false,
     forced: false

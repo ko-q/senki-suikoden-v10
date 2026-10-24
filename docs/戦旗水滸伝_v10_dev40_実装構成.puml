@@ -1,0 +1,139 @@
+' 2026-10-22: dev.40 の実コードを確認して作成。
+' 既存の設計図は保持。本ファイルは現在の主要クラスの抜粋。
+' PortはJavaScriptの構造契約。明示的なinterface宣言ではない。
+' 直近の検証記録: 2026-10-18、328テスト成功。この作図時には再実行していない。
+
+' 1ファイルにつき1図。PlantUML 1.2026.9で描画を検証。
+
+@startuml
+skinparam defaultFontName Meiryo
+title 戦旗水滸伝 dev.40 — 画面・進行・ルール・保存
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package "入口・戦闘の寿命" {
+  class PlayerShell
+  class StageSelectionScreen
+  class Game
+  class StageFactory
+  class BattleSessionFactory
+  class BattleSessionHost
+  class BattleSession
+}
+package "境界（構造契約）" {
+  interface BattleCommandPort
+  interface BattlePresentationPort
+  interface BattleCheckpointPort
+}
+package "画面と演出" {
+  class BattleScreen {
+    +connectCommandPort(commandPort)
+    +present(request, abortSignal)
+    +refresh()
+    -presentationUnitId
+  }
+  class BattleRenderer {
+    +render(stage, viewState)
+  }
+  class SelectionRingView
+  class BoardViewportLayout
+  class BattleEffectManager
+  class DialogueController
+  class ActionCutInSession
+  class BattleVisualEffectSession
+  class BattleResultEffectSession
+  class BattleAudioSession
+}
+package "進行と計算ルール" {
+  class BattleController {
+    +startNewBattle()
+    +resumeLoadedBattle()
+    +endPlayerTurn()
+    +executeAction(request, selectedPath)
+    +executeWait(unit, selectedPath, finalFacing)
+    +createSaveSnapshot()
+  }
+  class MovementService
+  class CombatService
+  class TacticService
+  class StatusService
+  class AIService
+  class BattleLogRecorder
+  class BattleRandom
+}
+package "戦闘データ" {
+  class Stage
+}
+package "保存" {
+  class SaveCheckpointAdapter
+  class SaveService
+  class SaveRepository
+}
+
+PlayerShell *-- StageSelectionScreen
+PlayerShell --> Game : 章選択から開始
+Game --> StageFactory
+Game --> BattleSessionFactory
+Game *-- BattleSessionHost
+BattleSessionHost *-- "0..1" BattleSession : 現在の戦闘を交換・破棄
+StageFactory ..> Stage : 生成
+BattleSessionFactory ..> BattleSession : 一式を構築
+BattleSession *-- BattleController
+BattleSession *-- BattleScreen
+BattleSession --> Stage
+BattleSession --> BattleRandom
+
+BattleScreen ..> BattleCommandPort : 操作・照会
+BattleController ..|> BattleCommandPort
+BattleController ..> BattlePresentationPort : 表示要求
+BattleScreen ..|> BattlePresentationPort
+BattleController ..> BattleCheckpointPort : 安定時の自動保存
+SaveCheckpointAdapter ..|> BattleCheckpointPort
+SaveCheckpointAdapter --> SaveService
+Game --> SaveService : 手動保存・読み込み・復旧
+Game *-- SaveCheckpointAdapter
+SaveService --> SaveRepository
+SaveService --> StageFactory : 復元先を生成
+
+BattleScreen --> BattleRenderer
+BattleScreen --> BattleEffectManager
+BattleScreen *-- DialogueController
+BattleScreen --> Stage : 読み取り
+BattleRenderer *-- SelectionRingView
+BattleRenderer *-- BoardViewportLayout
+BattleEffectManager --> BattleRenderer
+BattleEffectManager --> ActionCutInSession
+BattleEffectManager --> BattleVisualEffectSession
+BattleEffectManager --> BattleResultEffectSession
+BattleEffectManager --> BattleAudioSession
+
+BattleController --> Stage : 更新順を統括
+BattleController --> MovementService : 移動の照会・検証
+BattleController --> CombatService : 攻撃
+BattleController --> TacticService : 計略
+BattleController --> StatusService : 状態異常
+BattleController --> AIService : 自動行動の計画
+BattleController *-- BattleLogRecorder
+BattleController --> BattleRandom
+AIService --> MovementService
+AIService --> CombatService
+AIService --> TacticService
+AIService --> BattleRandom
+BattleLogRecorder --> Stage : 確定結果を履歴へ
+
+note right of BattleScreen
+  選択・仮移動・入力ロックを管理。
+  dev.40: 自動行動の表示対象を
+  操作用の選択部隊と分離した。
+end note
+note bottom of MovementService
+  位置を直接更新しない。
+  実移動はControllerからBattleMapへ。
+end note
+legend bottom
+  実線矢印: 参照・利用 / 破線矢印: 依存
+  黒菱形: 保持・寿命管理 / 白三角: 契約の実装
+  画像・音声資産、細かなView、保存処理の関数群は省略。
+endlegend
+@enduml

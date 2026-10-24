@@ -26,6 +26,8 @@ function actionRequest(actionType, actorAffiliation = Affiliation.PLAYER) {
     actionType,
     actorId: "actor",
     targetId: "target",
+    actorPosition: { x: 0, y: 0 },
+    targetPosition: { x: 0, y: 1 },
     actorAffiliation,
     actorIsMob: false,
     forced: false
@@ -59,20 +61,24 @@ test("tactic cast, damage and status requests map independently", () => {
   );
   assert.deepEqual(cueIds(createSemanticPresentationRequest(
     PresentationRequestType.DAMAGE,
-    { operationType: ActionType.FIRE, entries: [] }
+    { operationType: ActionType.FIRE, actorId: "actor", entries: [] }
   )), [AudioCueId.FIRE_DAMAGE]);
   assert.deepEqual(cueIds(createSemanticPresentationRequest(
     PresentationRequestType.STATUS,
     {
       reason: ActionType.ILLUSION,
-      entries: [{ after: [{ type: UnitStatus.ILLUSION, remainingTurns: 1 }] }]
+      actorId: "actor",
+      entries: [{ unitId: "target", position: { x: 0, y: 1 }, before: [],
+        after: [{ type: UnitStatus.ILLUSION, remainingTurns: 1 }], effectTurns: 1 }]
     }
   )), [AudioCueId.ILLUSION_SUCCESS]);
   assert.deepEqual(cueIds(createSemanticPresentationRequest(
     PresentationRequestType.STATUS,
     {
       reason: ActionType.CHARGE,
-      entries: [{ after: [{ type: UnitStatus.CONFUSED, remainingTurns: 1 }] }]
+      actorId: "actor",
+      entries: [{ unitId: "target", position: { x: 0, y: 1 }, before: [],
+        after: [{ type: UnitStatus.CONFUSED, remainingTurns: 1 }], effectTurns: 1 }]
     }
   )), [AudioCueId.CONFUSION_SUCCESS]);
 });
@@ -80,11 +86,12 @@ test("tactic cast, damage and status requests map independently", () => {
 test("trap, phase and battle result requests keep their dedicated sounds", () => {
   assert.deepEqual(cueIds(createSemanticPresentationRequest(
     PresentationRequestType.TRAP,
-    { trapId: "trap", neutralized: true }
+    { trapId: "trap", trapKind: "spell", unitId: "actor", neutralized: true,
+      damage: 0, beforeTroops: 100, afterTroops: 100, defeated: false, statusChange: null }
   )), [AudioCueId.CONFIRM]);
   assert.deepEqual(cueIds(createSemanticPresentationRequest(
     PresentationRequestType.DAMAGE,
-    { operationType: "TRAP", entries: [] }
+    { operationType: "TRAP", actorId: null, entries: [] }
   )), [AudioCueId.TRAP_DAMAGE]);
   assert.deepEqual(cueIds(createSemanticPresentationRequest(
     PresentationRequestType.PHASE,
@@ -93,11 +100,11 @@ test("trap, phase and battle result requests keep their dedicated sounds", () =>
 
   const victory = createSemanticPresentationRequest(
     PresentationRequestType.BATTLE_RESULT,
-    { outcome: BattleOutcome.VICTORY }
+    { stageId: "stage_a", objectiveId: "win", turn: 1, phase: "PLAYER", outcome: BattleOutcome.VICTORY }
   );
   const defeat = createSemanticPresentationRequest(
     PresentationRequestType.BATTLE_RESULT,
-    { outcome: BattleOutcome.DEFEAT }
+    { stageId: "stage_a", objectiveId: "lose", turn: 1, phase: "PLAYER", outcome: BattleOutcome.DEFEAT }
   );
   assert.equal(audioThemeForPresentation(victory), AudioThemeId.VICTORY);
   assert.equal(audioThemeForPresentation(defeat), AudioThemeId.DEFEAT);

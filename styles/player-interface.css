@@ -1,0 +1,123 @@
+/* Player-facing layout follows the pinned v9.7.75 interface. */
+:root{color-scheme:light;color:#281f16;--cell:min(11.2vw,70px);--line:#72583a;--gold:#e8b845}
+body{height:100dvh;overflow:hidden;background:radial-gradient(circle at 50% -10%,#ffffffbf,transparent 42%),linear-gradient(#dcc79f,#b58d59)}
+.app-shell{width:100%;max-width:980px;height:100dvh;margin:auto;padding:10px}
+#battleHost,.battle-view{height:100%;min-height:0}
+.battle-view{display:flex;flex-direction:column;gap:10px}
+.status-panel{display:flex;align-items:center;gap:6px;flex:0 0 34px;padding:6px 8px;border:1px solid var(--line);border-radius:12px;background:rgba(255,250,240,.97);font-size:14px;font-weight:900}
+.unit-counts{display:flex;gap:5px;margin-left:auto}
+#playerCountText,#enemyCountText{padding:3px 6px;border-radius:8px;color:white;font-size:11px}
+#playerCountText{background:linear-gradient(#5e806b,#3e5e4c)}#enemyCountText{background:linear-gradient(#a94f41,#7a2e27)}
+.preview-panel{position:relative;flex:1;min-height:0;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;background:#e9d7b5;overflow:hidden}
+.battle-toolbar{position:absolute;top:6px;left:6px;right:6px;z-index:52;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0;padding:6px;border:1px solid #9e8058;border-radius:12px;background:rgba(246,237,219,.985);box-shadow:0 8px 20px #2d1d0f45}
+.battle-toolbar button{min-height:36px;padding:5px 4px;border:1px solid #66513a;border-radius:9px;font-weight:900;font-size:11.5px;line-height:1.15;white-space:nowrap;color:#3b2b1e;background:linear-gradient(#fff8e9,#dfceb0)}
+.battle-toolbar .battle-status-button{background:linear-gradient(#eef5f3,#cadbd5);color:#273f38}.battle-toolbar .strategy-guide-button{background:linear-gradient(#f3eef8,#d9cce8);color:#463854}
+.battle-toolbar .battle-end-button,.main-button{color:white;background:linear-gradient(#39779b,#21536f)}
+button:disabled{opacity:.55;cursor:default}
+.preview-panel{background:transparent}
+.board-scroll{height:100%;overflow:auto;overscroll-behavior:contain;padding:0;scroll-padding-top:0;overflow-anchor:none}
+.board-scroll-spacer{width:1px;height:0;pointer-events:none;overflow-anchor:none}
+.battle-board-shell{position:relative;width:max-content;margin:0 auto}
+.board{display:grid;gap:0;width:max-content;min-width:0;padding:0;border:0;border-radius:0}
+.board .cell{position:relative;width:var(--cell);height:var(--cell);min-width:0;min-height:0;padding:0;border:1px solid #ffffff18;border-radius:0;aspect-ratio:1;box-shadow:none;opacity:1}
+.board[data-map-ready="true"]>.cell{background:transparent}
+.cell.is-reachable::before{inset:25%;border:3px solid #fffc;border-radius:50%;background:#2173bcc2;box-shadow:0 0 0 2px #1b496e73}
+.cell.is-path::after{display:none}
+.cell.is-target::after{content:"";position:absolute;inset:12%;border:5px solid #ce3028eb;border-radius:50%;box-shadow:0 0 0 2px #fffb;pointer-events:none;z-index:11}
+.cell.is-facing::before{content:"";position:absolute;inset:7%;border:3px dashed #f1be30fa;border-radius:12px;background:#ffd5521a;pointer-events:none;z-index:10}
+.cell.is-origin:not(.has-preview),.cell.is-destination{outline:none}
+.cell.is-origin:not(.has-preview) .unit-token,.cell.is-destination .unit-token{outline:3px solid #aee8ff;outline-offset:2px}
+.move-cost{position:absolute;top:3px;right:3px;bottom:auto;left:auto;z-index:11;min-width:19px;height:19px;padding:0 4px;border-radius:999px;color:white;background:#192a3adb;font-size:11px;font-weight:900;line-height:19px}
+.unit-token{position:absolute;inset:16%;width:auto;height:auto;display:flex;align-items:center;justify-content:center;padding:0;border:2px solid #f6e7c8;border-radius:50%;color:white;font-size:clamp(11px,3vw,18px);line-height:1;box-shadow:0 2px 4px #0008;z-index:8}
+.unit-token{inset:13%;border:3px solid #2a2017;font-family:serif;font-size:clamp(17px,4vw,26px);overflow:visible}
+.unit-token.player{background:linear-gradient(#e8f4fb,#6ea7cc 42%,#2b6f9e)}.unit-token.enemy{background:linear-gradient(#fde8de,#d58270 42%,#913c31)}
+.unit-token.is-finished{filter:brightness(.72);opacity:1}.unit-token small{display:none}.unit-token strong{white-space:nowrap;text-shadow:0 1px 2px #000a}
+.unit-hp{position:absolute;left:-12%;right:-12%;bottom:-10px;height:7px;overflow:hidden;border:1px solid #16100aa6;border-radius:999px;background:#19120aa6}.unit-hp>span{display:block;height:100%;background:linear-gradient(90deg,#3f9c45,#91dd65)}
+.unit-facing{position:absolute;width:0;height:0;z-index:10}.unit-facing[data-facing="NORTH"]{top:-12px;left:calc(50% - 7px);border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:11px solid #e8b845}.unit-facing[data-facing="SOUTH"]{bottom:-12px;left:calc(50% - 7px);border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid #e8b845}.unit-facing[data-facing="EAST"]{right:-12px;top:calc(50% - 7px);border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:11px solid #e8b845}.unit-facing[data-facing="WEST"]{left:-12px;top:calc(50% - 7px);border-top:7px solid transparent;border-bottom:7px solid transparent;border-right:11px solid #e8b845}
+/* Fixed V9 flag silhouette; cell-relative size follows the responsive board. */
+.escape-flag{position:absolute;z-index:3;left:38%;top:4%;width:50%;height:78%;pointer-events:none;filter:drop-shadow(0 3px 2px #0006)}
+.escape-flag .pole{position:absolute;left:11%;top:3%;bottom:0;width:5px;border-radius:3px;background:#5b3a1f}
+.escape-flag .cloth{position:absolute;left:15%;top:4%;width:68%;height:42%;display:flex;align-items:center;justify-content:center;border:2px solid #6c241d;border-left:none;border-radius:0 5px 5px 0;color:#fff8df;background:linear-gradient(135deg,#d8a632,#9b2f28 72%);font-family:serif;font-size:calc(var(--cell)*.22);font-weight:1000;text-shadow:0 1px 2px #000}
+.command-dock{position:absolute;top:60px;left:6px;right:6px;z-index:48;max-height:calc(100% - 66px);overflow:auto;padding:6px;border:1px solid #9e8058;border-radius:12px;background:rgba(246,237,219,.985);box-shadow:0 8px 20px #2d1d0f45}
+.terrain-info{margin:0 0 6px;padding:7px 9px;border:1px solid #bca47e;border-radius:10px;background:#efe3cd;font-size:13px;white-space:pre-line}
+.selected-character{position:relative;display:block;min-height:62px;margin:0 0 6px;padding:7px 62px 7px 9px;border:1px solid #bca47e;border-radius:10px;background:#efe3cd}
+.unit-summary{margin:0;padding:0;border:0;background:transparent;font-size:13px;line-height:1.5;white-space:pre-line;color:#3f3428}.selected-portrait{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:40px;height:48px;min-width:0;border:1px solid #8b6a40;border-radius:6px}
+.command-toolbar,.tactic-buttons,.facing-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0}
+.command-dock button{min-height:42px;padding:5px 3px;border:1px solid #493722;border-radius:9px;background:linear-gradient(#fffaf0,#dfcfb3);color:#493722;font-size:13px;font-weight:900}
+.command-dock #chargeButton{background:linear-gradient(#e89666,#b55b32);color:white}.command-dock #tacticButton{background:linear-gradient(#9870b1,#6b4485);color:white}.command-dock #waitButton{background:linear-gradient(#6e9562,#466c3a);color:white}
+.command-footer{display:flex;gap:6px;margin-top:6px}.command-footer #resetButton{flex:0 0 76px}.instruction{flex:1;margin:0;padding:5px 8px;border:1px solid #bca47e;border-radius:9px;background:#fff8e9;color:#493722;font-size:12px;line-height:1.35}
+.tactic-panel,.facing-panel{margin:0;padding:0;border:0;background:none}.tactic-buttons{grid-template-columns:repeat(3,minmax(0,1fr))}.facing-panel{margin-top:6px}
+.player-overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:18px;background:#18120dde;backdrop-filter:blur(5px)}
+.player-card{width:min(94vw,520px);max-height:90dvh;overflow:auto;padding:22px;border:2px solid #83683f;border-radius:20px;text-align:center;background:linear-gradient(135deg,#fff9,#fff0 45%),#fff6e4;color:#281f16;box-shadow:0 18px 50px #140d0873}
+.player-card h2{margin:0 0 8px;font-family:serif;font-size:29px}.player-card button{min-height:46px;border:1px solid #493722;border-radius:10px;font-weight:900;box-shadow:0 2px 4px #2f1f1029}
+.stage-intro{font-size:13px;line-height:1.6}.stage-list{display:grid;gap:9px;margin:16px 0}.stage-btn{padding:12px;text-align:left;background:linear-gradient(#426f86,#234b60);color:white}.stage-btn strong{display:block;font-size:17px}.stage-btn small{font-size:12px;color:#e8dbc5;line-height:1.5}
+.stage-load-button{width:100%;margin:14px 0 2px;padding:12px;border-color:#4e6c5b!important;color:white;background:linear-gradient(#527c68,#315744)}
+.main-button{width:100%;padding:10px}.player-card h3{margin:14px 0 4px;font-size:16px}.mission-card p{margin:4px 0 18px;line-height:1.6}
+.save-overlay{z-index:90}.save-slot-list{display:grid;grid-template-columns:1fr;gap:8px;max-height:55dvh;overflow:auto}.save-slot-row{padding:10px;border:1px solid #a58a65;border-radius:10px;background:#f4ead8;color:#281f16;text-align:left}.save-slot-summary{color:#5a4938}.save-slot-actions button,.persistence-toolbar button,.stage-info-actions button{background:linear-gradient(#fffaf0,#dfcfb3);color:#493722;font-size:12px}.save-slot-actions,.persistence-toolbar,.stage-info-actions{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.battle-info-body{white-space:pre-line;text-align:left;line-height:1.7;font-size:14px}.info-overlay{z-index:85}.recovery-overlay{z-index:95}.recovery-summary{color:#493722;background:#f8ecd5}.game-result-overlay{z-index:94}
+.dialogue-overlay{z-index:100;background:#18120d70}.dialogue-card{width:min(94vw,600px);padding:18px;border:2px solid #83683f;border-radius:16px;background:#fff6e4;color:#281f16}.dialogue-speaker{color:#493722}.dialogue-text{color:#281f16}.dialogue-card .primary-button{background:linear-gradient(#346f8e,#1f4c65);color:white}
+.dialogue-heading{margin:0 0 8px}.dialogue-action{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;color:#fff;background:#6b4a84;font-family:system-ui,sans-serif;font-size:11px;vertical-align:middle}.dialogue-action[hidden]{display:none}
+.event-text[data-tone="error"]{display:block!important;position:absolute;bottom:6px;left:6px;right:6px;z-index:60;padding:8px;background:#fff0df;color:#92251b}
+#recoverySummary{white-space:pre-line;line-height:1.7}
+.save-overlay[data-mode="load"] .save-slot-actions .primary-button,.save-overlay[data-mode="save"] .save-slot-actions .secondary-button{display:none}
+@media(max-width:420px){.app-shell{padding:6px}.command-dock{top:58px}.command-dock button{font-size:11px}.player-card{padding:18px}.battle-toolbar button{font-size:10.5px}}
+/* V9's long-press ability card is a read-only overlay above battle controls. */
+.unit-detail-overlay{position:fixed;inset:0;z-index:110;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(26,18,10,.6);touch-action:none;overscroll-behavior:contain;user-select:none}
+.unit-detail-overlay[hidden]{display:none}
+.unit-detail-card{width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:linear-gradient(135deg,#fff7dd,#ead5a7);color:#302312;border:3px solid #805a2c;border-radius:16px;padding:18px;box-shadow:0 18px 55px #0007}
+.unit-detail-head{display:grid;grid-template-columns:135px 1fr;gap:14px;align-items:start}
+.unit-detail-portrait{width:135px;height:160px;border:2px solid #9b763e;border-radius:12px;overflow:hidden;background:#dac699}
+.unit-detail-portrait img{width:100%;height:100%;object-fit:cover}
+.unit-detail-name{font-size:25px;margin:0 0 4px;color:#342514}
+.unit-detail-side{font-size:12px;color:#705634;margin-bottom:8px}
+.unit-detail-line{font-size:14px;line-height:1.65;font-weight:700}
+.unit-detail-status{font-size:12px;color:#764280}
+.unit-detail-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0}
+.unit-detail-stat{background:#fff8e5;border:1px solid #b18c52;border-radius:10px;text-align:center;padding:8px 3px;font-size:30px;color:#422d15}
+.unit-detail-stat span{display:block;font-size:11px;color:#6f593d}
+.unit-detail-traits{display:flex;gap:6px;flex-wrap:wrap}.unit-detail-trait{padding:5px 10px;border:1px solid #94723b;border-radius:8px;background:#eddfb7;font-weight:800;font-size:13px}
+.unit-detail-hint{text-align:center;font-size:12px;margin:14px 0 0;color:#705c40}
+.unit-token .unit-status{position:absolute;top:-12px;right:-13px;font:800 14px/1.2 sans-serif;padding:2px 4px;border-radius:8px;background:#fff7db;color:#7e398e;border:1px solid #77528d;z-index:4;text-shadow:none}
+.unit-token .unit-status[data-status="CONFUSED"]{top:auto;bottom:-10px;color:#654115;border-color:#96743c}
+#selectedUnitText,#selectedUnitPortrait,.cell{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.battle-info-body[data-kind="status"]{max-height:55dvh;overflow:auto;line-height:1.85}
+.info-overlay{align-items:flex-start;padding:max(66px,calc(env(safe-area-inset-top) + 56px)) 12px 12px;background:rgba(27,19,12,.24);backdrop-filter:none}
+.info-overlay .player-card{width:min(680px,100%);max-height:calc(100dvh - 86px);padding:14px;border:1px solid #4c3828;border-radius:16px;background:rgba(255,248,232,.985);text-align:left}
+.info-overlay .player-card h2{font-size:20px;margin:0 0 12px}
+.battle-info-body[data-kind="guide"]{max-height:60dvh;overflow:auto;font-size:13px;line-height:1.65}
+.battle-info-body h3{font-size:15px;margin:16px 0 6px;color:#49341b}.battle-info-body p{margin:6px 0 12px}
+@media(max-width:400px){.unit-detail-card{padding:12px}.unit-detail-head{grid-template-columns:110px 1fr;gap:10px}.unit-detail-portrait{width:110px;height:145px}.unit-detail-line{font-size:12px}.unit-detail-name{font-size:23px}}
+
+/* V9 selection feedback: ready ally, finished ally, enemy/empty cell. */
+.selection-ring{
+  --selection-ring-color:rgba(255,255,255,.96);
+  position:absolute;inset:9%;z-index:9;border:3px solid var(--selection-ring-color);
+  border-radius:50%;pointer-events:none;opacity:.42;
+  filter:blur(.35px);
+  box-shadow:
+    0 0 4px var(--selection-ring-color),
+    0 0 10px color-mix(in srgb,var(--selection-ring-color) 72%,transparent),
+    inset 0 0 6px color-mix(in srgb,var(--selection-ring-color) 52%,transparent);
+  animation:selectionRingFirefly 1.08s ease-in-out infinite;
+  will-change:opacity,transform,filter
+}
+.selection-ring::before{
+  content:"";position:absolute;inset:-4px;border:3px solid var(--selection-ring-color);
+  border-radius:50%;opacity:.32;filter:blur(2.4px)
+}
+.selection-ring-ready{--selection-ring-color:rgba(174,232,255,.98)}
+.selection-ring-done{--selection-ring-color:rgba(255,205,145,.98)}
+.selection-ring-neutral{--selection-ring-color:rgba(255,255,255,.98)}
+/* V9 hides the ring while a hit/status flash or large cast effect is visible.
+   Follow the actual effect lifetime, including charge dust that outlives ACTION. */
+.battle-board-shell:has(.battle-effect-unit-flash,.charge-dust-effect,
+  .fire-tactic-burst-effect,.water-tactic-burst-effect,.strategy-cast-cell-flash,
+  .wide-illusion-overlay,.confusion-symbol-effect,.normal-illusion-skull-effect) .selection-ring{visibility:hidden}
+@keyframes selectionRingFirefly{
+  0%,100%{opacity:.30;transform:scale(.955);filter:blur(.55px)}
+  48%,55%{opacity:.88;transform:scale(1.025);filter:blur(.15px)}
+}
+
+@media(prefers-reduced-motion:reduce){.selection-ring{animation:none;opacity:.75}}
+#selectedUnitInfo[hidden]{display:none}
+#resultNextBattleButton{margin-right:8px;background:linear-gradient(#557694,#36526c);color:#fff}

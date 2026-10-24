@@ -36,6 +36,7 @@ export function createServiceStage({
   objectives = [],
   hiddenTrapDefinitions = [],
   unitControlRules = [],
+  briefing = null,
   introDialogueId = null,
   victoryDialogueId = null,
   defeatDialogueId = null
@@ -65,6 +66,7 @@ export function createServiceStage({
     aiConfig,
     hiddenTrapDefinitions,
     unitControlRules,
+    briefing,
     introDialogueId,
     victoryDialogueId,
     defeatDialogueId

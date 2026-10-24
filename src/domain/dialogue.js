@@ -2,10 +2,12 @@ import { invariant, requireIdentifier, requireNonEmptyString } from "../core/dom
 import { Character } from "./character.js";
 
 export class Speech {
-  constructor({ id, speaker, text, actionLabel = undefined }) {
+  constructor({ id, speaker = null, narratorLabel = null, text, actionLabel = undefined }) {
     this.id = requireIdentifier(id, "SPEECH_ID_INVALID");
-    invariant(speaker instanceof Character, "SPEECH_SPEAKER_REQUIRED");
+    invariant(speaker instanceof Character || (speaker === null && narratorLabel !== null), "SPEECH_SPEAKER_REQUIRED");
+    invariant(speaker === null || narratorLabel === null, "SPEECH_NARRATOR_WITH_CHARACTER");
     this.speaker = speaker;
+    this.narratorLabel = narratorLabel === null ? null : requireNonEmptyString(narratorLabel, "SPEECH_NARRATOR_LABEL_INVALID");
     this.text = requireNonEmptyString(text, "SPEECH_TEXT_INVALID");
     this.actionLabel = actionLabel === undefined ? undefined : String(actionLabel);
     Object.freeze(this);

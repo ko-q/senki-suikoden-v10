@@ -35,16 +35,16 @@ const ZERO_EFFECT_DURATIONS = Object.freeze(Object.fromEntries(
     .map((type) => [type, 0])
 ));
 
-function createStageFactory() {
+function createStageFactory(definitions = [DEVELOPMENT_STAGE_DEFINITION]) {
   return new StageFactory({
-    definitions: [DEVELOPMENT_STAGE_DEFINITION],
+    definitions,
     characterManager: new CharacterManager([]),
     terrainCatalog: createV9CompatibleTerrainCatalog()
   });
 }
 
-function createGameRuntime({ storage = new MemoryStorage(), persistence = true } = {}) {
-  const stageFactory = createStageFactory();
+function createGameRuntime({ storage = new MemoryStorage(), persistence = true, definitions } = {}) {
+  const stageFactory = createStageFactory(definitions);
   const battleHost = new FakeElement();
   const { template, createdViews } = createFakeBattleViewTemplate();
   const panelElements = createFakePersistenceElements();
@@ -133,8 +133,8 @@ test("Game shows the result panel only after the BattleResult sequence completes
       ]
     ), true);
     await waitUntil(() => runtime.resultElements.overlay.hidden === false, "RESULT_PANEL");
-    assert.equal(runtime.resultElements.title.textContent, "Victory");
-    assert.equal(runtime.resultElements.message.textContent, "stage.foundation_preview");
+    assert.equal(runtime.resultElements.title.textContent, "勝利");
+    assert.equal(runtime.resultElements.message.textContent, "stage.foundation_previewを攻略しました。");
 
     runtime.resultElements.newBattleButton.dispatch("click");
     assert.equal(runtime.resultElements.overlay.hidden, true);
@@ -235,7 +235,7 @@ test("Game offers and resumes a valid temporary recovery candidate", async () =>
     const startup = runtime.game.start();
     assert.equal(startup.status, "awaiting_recovery_choice");
     assert.equal(startup.recovery.status, "temporary");
-    assert.match(runtime.panelElements.recoverySummary.textContent, /temporary copy/);
+    assert.match(runtime.panelElements.recoverySummary.textContent, /一時保存/);
     runtime.panelElements.resumeRecoveryButton.dispatch("click");
     await waitUntil(
       () => runtime.game.currentSession?.controller.flowState === BattleFlowState.IDLE,
@@ -260,7 +260,7 @@ test("Game starts a fresh battle when every recovery generation is corrupt", () 
     assert.notEqual(runtime.game.currentSession, null);
     assert.equal(runtime.createdViews.length, 1);
     assert.equal(runtime.panelElements.recoveryOverlay.hidden, true);
-    assert.match(runtime.panelElements.persistenceStatus.textContent, /corrupt/);
+    assert.match(runtime.panelElements.persistenceStatus.textContent, /破損/);
     assert.equal(runtime.panelElements.persistenceStatus.dataset.tone, "warning");
   } finally {
     runtime.game.dispose();
@@ -296,7 +296,7 @@ test("Game refreshes a changed recovery guard before the user retries Resume", a
     runtime.panelElements.resumeRecoveryButton.dispatch("click");
     assert.equal(runtime.game.currentSession, null);
     assert.equal(runtime.panelElements.recoveryOverlay.hidden, false);
-    assert.match(runtime.panelElements.persistenceStatus.textContent, /summary was refreshed/);
+    assert.match(runtime.panelElements.persistenceStatus.textContent, /更新した内容/);
 
     runtime.panelElements.resumeRecoveryButton.dispatch("click");
     await waitUntil(
@@ -333,7 +333,7 @@ test("Game keeps the current session when a selected manual slot changes before 
     assert.equal(runtime.game.currentSession, sessionBefore);
     assert.equal(runtime.battleHost.children[0], rootBefore);
     assert.equal(sessionBefore.isDisposed, false);
-    assert.match(runtime.panelElements.persistenceStatus.textContent, /another tab/);
+    assert.match(runtime.panelElements.persistenceStatus.textContent, /別のタブ/);
   } finally {
     runtime.game.dispose();
     restoreDocument();
@@ -368,7 +368,7 @@ test("Game repairs a manual backup without replacing the current battle session"
     assert.equal(runtime.battleHost.children[0], rootBefore);
     assert.equal(runtime.createdViews.length, 1);
     assert.equal(runtime.game.refreshManualSlots(false)[0].status, "occupied");
-    assert.match(runtime.panelElements.persistenceStatus.textContent, /Repaired/);
+    assert.match(runtime.panelElements.persistenceStatus.textContent, /修復/);
   } finally {
     runtime.game.dispose();
     restoreDocument();
@@ -405,9 +405,44 @@ test("Game degrades to a no-save battle when storage reads fail during startup",
     assert.equal(startup.status, "started_without_persistence");
     assert.notEqual(runtime.game.currentSession, null);
     assert.equal(runtime.panelElements.persistenceUnavailable.hidden, false);
-    assert.match(runtime.panelElements.persistenceStatus.textContent, /unavailable/);
+    assert.match(runtime.panelElements.persistenceStatus.textContent, /利用でき/ );
   } finally {
     runtime.game.dispose();
     restoreDocument();
   }
+});
+
+
+test("next chapter requires completed victory and replaces the session once; the last chapter cannot wrap", async () => {
+  const restore = installFakeDocument();
+  const second = { ...DEVELOPMENT_STAGE_DEFINITION, id: "second_chapter", titleKey: "第二章", chapterNumber: 2 };
+  const runtime = createGameRuntime({ persistence: false, definitions: [DEVELOPMENT_STAGE_DEFINITION, second] });
+  try {
+    runtime.game.start();
+    assert.equal(runtime.game.startNextStage(), null);
+    async function win() {
+      const session = runtime.game.currentSession, view = runtime.createdViews.at(-1);
+      view.elements.dialogueNextButton.dispatch("click");
+      await waitUntil(() => session.controller.isStableForSave(), "NEXT_READY");
+      const actor = session.stage.getUnit("preview_player"), target = session.stage.getUnit("preview_enemy");
+      target.restoreTroops(1);
+      await session.controller.executeAction(createActionRequest(ActionType.NORMAL_ATTACK, actor, target),
+        [1, 2, 3, 4, 5].map((x) => ({ x, y: 2 })));
+      await waitUntil(() => !runtime.resultElements.overlay.hidden, "NEXT_RESULT");
+      return session;
+    }
+    const firstSession = await win();
+    assert.equal(runtime.resultElements.nextBattleButton.hidden, false);
+    runtime.resultElements.nextBattleButton.dispatch("click");
+    runtime.resultElements.nextBattleButton.dispatch("click");
+    assert.equal(runtime.game.currentSession.stage.id, "second_chapter");
+    assert.equal(runtime.createdViews.length, 2);
+    assert.equal(firstSession.controller.isDisposed, true);
+    assert.equal(runtime.createdViews[0].elements.endTurnButton.listeners.has("click"), false);
+    assert.equal(runtime.createdViews[1].elements.dialogueOverlay.hidden, false);
+    await win();
+    assert.equal(runtime.resultElements.nextBattleButton.hidden, true);
+    assert.equal(runtime.game.startNextStage(), null);
+    assert.equal(runtime.game.currentSession.stage.id, "second_chapter");
+  } finally { runtime.game.dispose(); restore(); }
 });

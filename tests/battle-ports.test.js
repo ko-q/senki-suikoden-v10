@@ -36,10 +36,12 @@ test("Battle Port contracts accept structural adapters and reject missing method
 test("BattleCommandPort verifies the complete Screen-facing command surface", () => {
   const commandPort = {
     flowState: "IDLE",
+    canExecuteImmediateMove() {},
     createSaveSnapshot() {},
     dispose() {},
     endPlayerTurn() {},
     executeAction() {},
+    executeImmediateMove() {},
     executeWait() {},
     finalizeTacticFacing() {},
     getActionTargets() {},

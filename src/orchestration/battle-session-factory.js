@@ -6,6 +6,7 @@ import { PreparedBattleLoad } from "../core/prepared-battle-load.js";
 import { BattleRandom } from "../domain/battle-random.js";
 import { Stage } from "../domain/stage.js";
 import { BattleEffectManager } from "../presentation/battle-effect-manager.js";
+import { ActionCutInSession } from "../presentation/action-cut-in.js";
 import { BattleResultEffectSession } from "../presentation/battle-result-effects.js";
 import { BattleRenderer } from "../presentation/battle-renderer.js";
 import { BattleScreen } from "../presentation/battle-screen.js";
@@ -78,6 +79,7 @@ export class BattleSessionFactory {
     let visualSession = null;
     let resultSession = null;
     let audioSession = null;
+    let cutInSession = null;
     try {
       view.elements.versionValue.textContent = GAME_VERSION;
       const movementService = new MovementService();
@@ -91,6 +93,7 @@ export class BattleSessionFactory {
         battleRandom
       });
       const renderer = new BattleRenderer(view.elements);
+      cutInSession = new ActionCutInSession({ stage, host: view.root });
       visualSession = new BattleVisualEffectSession({
         stage,
         board: view.elements.board,
@@ -105,6 +108,7 @@ export class BattleSessionFactory {
         audioSession,
         visualSession,
         resultSession,
+        cutInSession,
         ...(this.#effectDurations === undefined
           ? {}
           : { durations: this.#effectDurations })
@@ -146,6 +150,9 @@ export class BattleSessionFactory {
       }
       if (effectManager === null && audioSession !== null) {
         audioSession.dispose();
+      }
+      if (effectManager === null && cutInSession !== null) {
+        cutInSession.dispose();
       }
       view.dispose();
       throw error;

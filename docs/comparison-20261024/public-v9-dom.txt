@@ -1,0 +1,182 @@
+- main:
+  - region "戦闘概要":
+    - generic: 味方ターン
+    - generic: 1 / 15
+    - generic "生存部隊数":
+      - generic: 味方 4
+      - generic: 敵 8
+  - region "戦闘マップ領域":
+    - button "ステージ情報"
+    - button "戦況"
+    - button "戦術指南"
+    - button "ターン終了"
+    - button
+    - button
+    - button
+    - button "脱":
+      - generic: 脱
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "守":
+      - generic: 守
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "弓":
+      - generic: 弓
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "弓":
+      - generic: 弓
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "謀":
+      - generic: 謀
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "乙":
+      - generic: 乙
+    - button
+    - button
+    - button "守":
+      - generic: 守
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "3":
+      - generic: "3"
+    - button "4":
+      - generic: "4"
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "朱":
+      - generic: 朱
+    - button "2":
+      - generic: "2"
+    - button "4":
+      - generic: "4"
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "2":
+      - generic: "2"
+    - button "1":
+      - generic: "1"
+    - button "3":
+      - generic: "3"
+    - button
+    - button
+    - button
+    - button
+    - button
+    - button "1":
+      - generic: "1"
+    - button "史":
+      - generic: 史
+    - button "陳":
+      - generic: 陳
+    - button "楊":
+      - generic: 楊
+    - button
+    - button
+    - button
+    - button "甲":
+      - generic: 甲
+    - button "2":
+      - generic: "2"
+    - button "1":
+      - generic: "1"
+    - button "2":
+      - generic: "2"
+    - button "4":
+      - generic: "4"
+    - button
+    - button
+    - button "騎":
+      - generic: 騎
+    - button
+    - region "選択部隊操作":
+      - generic "選択情報":
+        - text: 地形情報：
+        - strong: 道
+        - generic: 移動1／被ダメージ軽減なし
+        - text: 部隊情報：
+        - strong: 史進
+        - generic: 長押しで詳細
+        - generic: 兵力 130/130 方向 北 移動 4 状態 通常
+        - img "史進"
+      - button "遠距離不可" [disabled]
+      - button "突撃 1/1" [disabled]
+      - button "撹乱 1/1 Lv1" [disabled]
+      - button "待機"
+      - button "戻る"
+      - generic: 移動先を選べます。 移動せず向きだけ変える場合は「待機」を選べます。
+- status

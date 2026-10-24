@@ -1,152 +1,98 @@
 # 戦旗水滸伝 v10
 
-現行v9を残したまま、別Repository・別URLで段階試験するOO再設計版です。
-この成果物はMilestone 13であり、ゲーム全章の完成版ではありません。
+V9系の画面・操作・章の内容を踏襲し、内部を役割別クラスに整理しながら操作を改善する再設計版です。現行は `10.0.0-dev.42`。公開済みV9とは別の作業ディレクトリと保存領域を使います。
 
-## 現在動くもの
+## 公開状態と公開用ファイル
 
-- GitHub Pagesで直接配信できる依存なしのES Modules構成
-- Character / Unit / Terrain / BattleMap / MapCell
-- Army / ArmyManager
-- Stage runtime / StageFactoryの最小縦切り
-- Speech / Dialogueのruntime参照
-- StageEvent依存refの二段階解決と循環検査
-- UnitControlRule / HiddenTrap / BattleLogの骨格
-- MovementServiceの無副作用query
-- 最大3本の候補経路と決定的sort
-- BattleScreen / BattleRenderer / BattleEffectManagerを接続したスマートフォン対応画面
-- v9.7.75と同一byteの既存SE／BGM 20点
-- 意味的PresentationRequestから音源へ写像するAudioController
-- 初回操作での音声解錠、ON／OFF、visibility停止・再開
-- Battle単位の一時音所有と、破棄後の遅延decode再生防止
-- 章番号による戦闘BGM、勝利BGM、敗北BGMの切替
-- v9互換のtitle雷鳴・白転音とtitle BGM開始時機
-- v9.7.75と同一byteの戦闘画像素材8点
-- Battle専用overlayによる移動、弓、突撃、計略、状態、被害の画像演出
-- v9の演出時間と広域幻術SE開始時刻の同期
-- 再描画をまたぐ突撃砂煙と、Battle破棄時の演出一括cancel
-- v9.7.75と同一byteのtitle／勝利／敗北画面素材7点
-- 初回tapでopening、ready後の新しいtapでGameを起動するtitle画面
-- 将兵5秒→勝利文字5秒→光線3秒、敗残将兵5秒→敗北文字5秒の結果演出
-- 結果演出→結果Dialogue→Game結果画面の終了sequence
-- 戦闘終了時recovery clearと、先行checkpoint後への削除直列化
-- イントロ会話、部隊選択、移動Preview、全Action、待機・方向確定、Player phase終了の操作経路
-- 弓撃／投擲、突撃、撹乱Lv1〜3、幻術、広域幻術、火計、水計の選択・対象指定UI
-- Preview先を基準とするAction候補・対象highlightと、無効target選択時のmode保持
-- Player phase終了後の敵AI実行と次turn開始、開発用Objectiveによる勝敗表示
-- v9.7.75互換のBattleRandom（xorshift32）
-- CombatService（通常攻撃・弓撃/投擲・突撃）
-- TacticService（撹乱・幻術・広域幻術・火計・水計）
-- `canExecute / inspectTargets / estimate` のread-only API
-- 複数対象計略の同期的atomic commit
-- Elimination / Reach / UnitDefeat / TurnLimit / SurviveUntilTurn Objective
-- Reinforcement / Betrayal / MissionTransition / Dialogue Event
-- Definition順のfixed-point Event連鎖とterminal checkpoint callback
-- v9互換の隠し罠候補抽選、回避、妖術罠無効化、damage・status効果
-- StatusServiceによるCONFUSED / ILLUSIONの独立減算と発動優先
-- DOM非依存のDialogueController
-- 通常敵AI、幻術ForcedAction、Stage固有AIを無副作用Planとして生成
-- 高廉の広域幻術抑止、祝家荘の火計・水計安全判定、大名府追捕隊・優先標的
-- StageAIConfigのUnit IDからruntime参照への解決
-- BattleControllerによるcommand直列化、1cell移動、Trap、Event、Action、Objectiveの統合
-- 新規戦闘開始とロード再開の分離、敵phase途中のREADY Unit再開
-- TACTIC_COMMITTEDの方向確定待ちとstable save判定
-- data-onlyのMOVE / ACTION / DAMAGE / STATUS / TRAP / PHASE / BATTLE_RESULT要求
-- BattlePresentationPort / BattleCheckpointPortによる画面・回復保存との分離
-- immutable BattleSaveData checkpointと非blocking回復保存通知
-- Save format 6の厳密なSaveCodecとv6 passthrough SaveMigrator
-- v10専用namespaceだけを扱うprimary / temporary / backup SaveRepository
-- revision、writerId、storage lock、実データ比較による複数tab競合検出
-- 書込み後検証、fallback候補検査、selection guard付き削除
-- stable checkpointをrevision順に直列化するrecovery save queue
-- 全Unit、所属、位置、状態、使用回数、Trap、Event、Log、RNGの新Stage復元
-- contentRevision完全一致とStage runtime validationを通すPreparedBattleLoad
-- 新session接続成功後だけ旧sessionを破棄するBattleSessionHost
-- templateからdetached DOMを生成するBattleViewFactory
-- Controller、Screen、Service、Viewを一つの破棄単位にするBattleSessionFactory
-- Gameによる新規開始、recovery再開、manual Loadのsession lifecycle
-- 起動時に正常なrecoveryを検出した場合だけ表示するResume／Start new battle画面
-- empty／fallback／corrupt／incompatibleを区別する正式20枠の手動Save／Load／削除UI
-- temporary／backupを検証後にprimaryへ明示昇格するRepair操作
-- 上書き・Load・Repair・三世代削除の確認と、stale selection guardによる競合拒否
-- session交換時の旧固定button／盤面cell listener解除
-- 実画面のstable checkpointからv10 recovery slotへの自動保存
-- dispose時のAbort、演出失敗の隔離、予期しないDomain例外のFAULTED停止
-- 幻術同士討ち専用の味方通常攻撃経路
-- BattleCommandPortによる画面からControllerへの構造的接続検査
-- 二重tap防止、Dialogueと演出待機のAbort、dispose後の画面更新防止
-- v10専用保存prefixとsave format 6の定数固定
-- Node標準test runnerによる自動test
+公開V10は https://ko-q.github.io/senki-suikoden-v10/ 、公開V9は https://ko-q.github.io/senki-suikoden/ です。2026-10-24の切替前確認では公開V10にdev.13の開発用戦闘が残っていたため、ユーザーの承認を受けて、下記の9章を備えたdev.42を公開対象にしました。配信中の版はブラウザーのタブ名と`release-manifest.json`で確認できます。
 
-画面の人物とStageは、境界検証専用の英語fixtureです。正式な人物・章データではありません。
+`node scripts/build-site.mjs`で、ゲームに必要なファイルだけを新規の`_site/`へコピーします。既存の出力先は上書きせずエラーにします。9章・地図・顔画像を含む301ファイルのサイズ・SHA-256を検査し、`release-manifest.json`へ版・章一覧・全ファイルのハッシュを記録します。CIとPagesは同じ作成処理を使用します。
 
-## まだ入れていないもの
+公開と同じファイルから確認するには`node scripts/serve.mjs _site 4176`を使用します。M42でこの成果物を実ブラウザーで起動し、V9第一章と導入会話・作戦条件・部隊数・史進の能力表示・仮移動・1回取消を比較しました。画面上の案内文などの差は残ります。全章の同等性や公開切替が完了したという意味ではありません。
 
-- 正式人物データ（正本Excel第4.7版が必要）
-- 正式人物portraitとAction cut-in
-- 正式Stage map画像
-- 正式Stage
+## 現在の入口
 
-未実装機能を仮のgame ruleで埋めず、後続milestoneでv9.7.75実ファイルと正本を
-再照合しながら移植します。
+GitHub Pagesは既存のGitHub Actions方式を継続します。`main`へのpush、またはActionsの「Deploy GitHub Pages」の手動実行で、テスト・構文確認・公開用ファイルの検査が成功した場合にだけ公開します。V9とV10は同じ`ko-q.github.io`のlocalStorageを共有するため、保存prefixによる分離を維持します。
 
-Combat/Tacticの人物能力値はtest専用fixtureだけで検証しています。正式人物への能力ID・
-使用回数mappingは、正本Excel第4.7版の入手後に行います。
+タイトル → ステージ選択（全9章） → 各章の導入会話 → 作戦条件 → 戦闘、の順に進みます。開発用の英語fixtureは通常起動に使いません。
 
-現在の画面はBattleControllerとのAction操作境界を検証するものです。開発用Unitだけに
-全能力を付与し、通常攻撃を含む全Actionを画面から検証できます。この能力構成は正式な
-人物設定ではありません。
+- 固定V9.7.75の人物92名、全9章の部隊406隊（予備増援を含む）、マップ・会話・勝敗条件を接続。
+- M41で表示通知の必須項目・型の検査を追加し、通知を組み立てる責務を`BattlePresentationFactory`へ分離。撹乱の能力判定を戦闘・AI・表示で共有。全9章の同じ操作経路で、改修前後の7,785件の表示通知と最終戦闘状態が一致。
+- V9基準のステージ一覧、戦闘概要、上部4ボタン、部隊コマンド、移動範囲・向き指定を表示。
+- M40で敵の行動中の選択輪と画面追従を復元。敵の移動・その場攻撃・撹乱休み、味方の幻術による自動行動を表示し、入力ロックと分離。攻撃・計略演出の間は輪を隠す。
+- 通常の移動プレビューは位置と進行方向を表示し、攻撃または待機の確定時にDomainを更新。対象選択中でも「戻る」1回で移動前の位置・向きに戻り、同じ部隊の操作を続けられます。
+- 確定移動の各マスで進行方向を反映。罠で止まった際や脱出勝利時にも到着方向が残り、通常の待機では最後に指定した向きになります。
+- 脱出条件を満たす目的地を選ぶと、そのクリックで移動を確定し、停止位置で勝利を判定します。待機・向き指定は不要です。途中の罠で止まった場合は実際の位置と生存状態で判定し、通常の仮移動は取り消せます。
+- 隠し罠を通る移動も目的地の選択時に確定し、最初の罠で停止・行動終了します。効果後にV9の人物の反応台詞を表示。孫立らの罠把握は通常の仮移動を維持し、妖術罠の無効化でもその地点で止まります。
+- 経路上で脱出範囲を通過しただけでは勝利せず、範囲内の指定先まで移動できます。複数人の脱出では必要な全員がそろった時に成立します。
+- 操作欄の開閉で盤面が跳ねないよう位置を維持し、選択・取消時には対象マスを操作欄の下に収めます。第6・9章の待機部隊には「潜入待機」「陣中待機」を表示します。
+- 選択マスはV9の色分けで点滅し、空きマスの地形情報も確認できます。
+- 勝利演出と章末会話を終えると「次のステージ」で次章へ進めます。最終章・敗北時には表示しません。
+- 盤面・部隊情報の長押しで能力詳細を表示。行動後の部隊情報と状態異常の残りターンも表示します。
+- 未移動の部隊から行動済み・潜入待機中の味方へ切り替えた場合も、その部隊の情報を表示します。仮移動後や対象選択中の切り替え制限は維持します。
+- 戦況に攻撃方向・地形補正、計略・罠・援軍・寝返り・勝敗の履歴を記録し、保存・再開でも維持します。
+- 地形の軽減量、水軍・山野適性、連環馬の補正を表示。第三章の残り期限と奪取後の任務を進行に合わせて切り替えます。
+- 火計・水計・幻術は対象選択へ直接進み、通常の撹乱ではレベルを選びます。戦術指南はV9の10項目を移植しています。
+- 部隊の顔画像、戦法カットイン、音声、戦闘・勝敗演出は固定V9の素材を使用。
+- 救援会話の「味方救援」「敵軍警戒」などを人物名の横に表示。会話ボタンは最終行までV9と同じ「進む」です。
+- セーブ／ロードはステージ情報から開きます。中断データは起動時に選んで再開します。ロードでは導入会話と作戦条件を再生しません。
+- 第8章の門内追捕隊と両名脱出、第9章の第6味方ターンの郁保四寝返り、秦明敗走後の次の味方ターンの救援を実装。
 
-現在の画面ではstable checkpointのrecovery saveに加え、v9と同数の20個の手動slotへ
-Save／Load／Repair／削除できます。Load時は新しいBattle一式をdetached DOM上で検証し、
-成功した場合だけ表示rootとsessionを交換します。Repairは正常なtemporary／backupが選ばれた
-場合だけ表示し、選択後に別tabで内容が変わっていれば全世代を変更せず拒否します。より新しい
-非対応世代が手前にある場合もRepairを出さず、そのデータを将来の版のために保持します。
+人物値は固定V9の既存値です。未入手のExcel第4.7版との照合済みという意味ではありません。V9とほぼ同じ体験に戻す作業は継続中で、全章の手動完走や表示・操作の完全一致を確認済みとはしていません。
 
-音声はブラウザの自動再生制限に合わせ、画面右上の`Sound: Start`または最初の画面操作で
-解錠します。解錠後は同じbuttonでON／OFFを切り替えられます。
+全344テスト成功（2026-10-24）。元の編成・能力値と乱数seed 1で、全9章それぞれの開始から勝利までを自動検証しています。第二章は第8ターンに殲滅勝利、第三章は第5ターンの護送隊壊滅・追捕軍出現を経て第12ターンに晁蓋の兵力19・敵13隊が残る状態で脱出します。第四章は第6ターンに宋江の兵力116・敵4隊が残る状態で脱出します。第五章は第2ターンの救援後、第7ターンに宋江10・晁蓋146・敵28隊生存で二人が脱出します。途中保存から再開しても、部隊・状態異常・残り使用回数・乱数・イベント・戦況履歴を含む最終状態が連続実行と一致します。第五章は救援前後・晁蓋だけが先着した状態・最後の移動直前の4地点を比較しました。M39で第一章も4地点の保存再開と全16操作の画面入力を追加し、全9章の途中保存からの最終状態比較と、画面クリックから章末会話までの結合テストがそろいました。第一章は史進55・第6ターンの脱出です。全9章を一つの連続セッションで通した検証という意味ではありません。
 
-戦闘画像演出は盤面DOMとは別のBattle専用overlayに表示します。盤面再描画をまたいで残る
-突撃砂煙を含め、Loadや新規開始で旧Battleを破棄した時点ですべて停止・除去します。
+第一章は実ブラウザーでも、第6ターンに脱出マスを選ぶだけで勝利し、勝利演出・章末会話・第二章への移行まで確認済みです。乱数や盤面を注入しない通常操作で、史進の兵力57・敵7隊が残った試行です。第五章は実ブラウザーで第2ターンの救援到着・中断からの再開・7人の行動可能状態を確認しました。第二〜五章の上記完走は自動検証であり、実ブラウザーの完走とは区別します。第二〜九章の実ブラウザー完走と、細かなV9との表示・操作比較は残っています。
 
-title画面は最初のtapで6.77秒のopeningを開始し、表示完了後の次のtapでBattleまたは
-recovery選択へ進みます。勝敗演出も全layer表示完了後の新しいtapだけを受け付けます。
+第六章は元の80部隊・能力値と敵AIのまま、第4ターンの孫立ら8人の加入を経て、第18ターンに宋江71・味方7隊生存で殲滅勝利する経路を自動検証しました。寝返り前後と最後の攻撃直前を含む4地点から再開しても最終状態が一致し、画面クリックの結合テストでも章末会話まで成功。罠直後からの保存・再開は別経路で検証しています。寝返り時に敵軍へ付く撹乱も戦況履歴へ記録します。実ブラウザーではV9の罠台詞を比較し、V10で張横が目的地の手前の罠に止まること、137→117・撹乱1・反応台詞・行動終了と中断再開を確認しています。
 
-## ローカル確認
+第七章は元の61部隊・能力値と敵AIのまま、第18ターンに宋江149・味方5隊生存で殲滅勝利する226操作の経路を検証。幻術の残存中、公孫勝の敗走、広域幻術の後、高廉の敗走後、最後の攻撃直前の5地点から再開しても最終状態が一致しました。同士討ちや火計・水計で倒れた味方の行動状態が残り、保存できなくなる不具合を修正。妖術罠の履歴と特殊ルールの表示も修正しました。実ブラウザーでは戴宗の罠停止・会話・履歴を確認しています。
+
+第八章は元の57部隊・能力値・敵AI、seed 1で第6ターンに盧俊義95・石秀97・呉用145、敵20隊を残して脱出する84操作を検証。退路確保後・追撃中・渡河後・盧俊義だけ先着した状態の4地点から再開しても最終状態が一致し、画面クリックの結合テストでも章末会話まで成功しました。脱出範囲のマス指定を半径に合わせてV9へ揃えています。範囲を新たに着色する変更はありません。
+
+第九章は元の95部隊・能力値・敵AI、seed 1で第6味方ターンまでの137操作を検証。秦明の敗走後、郁保四の寝返りと4人の救援が同じターンに続けて起こり、加入した5人を操作できます。発生前後・郁保四の攻撃後・加入した全員の行動後の4地点から再開しても最終状態が一致し、画面クリックの結合テストも成功しました。郁保四が先に敗走していた場合の説明を戦況履歴へ復元。M38ではさらに第14ターンの殲滅勝利まで327操作を追加。宋江149・盧俊義41・味方11隊生存で勝利し、救援前後・火計と水計の使用後・寝返り前後・最後の攻撃前の6地点から再開しても最終状態が一致しました。画面クリックでも章末会話まで成功。実ブラウザーでは救援後の水計・火計と、火計の向き未確定からの再開を確認しています。
+
+## ローカル起動
+
+Node.js 22以降を使用します。外部パッケージのインストールは不要です。
+
+```sh
+npm start
+```
+
+表示された `http://127.0.0.1:4173/` を開きます。別ポートを使う場合：
+
+```sh
+node scripts/serve.mjs . 4174
+```
+
+Windowsの拡張子設定に依存せず、ES Modulesを正しいMIMEで配信する開発サーバーです。ファイルを直接開く方式は使用しません。
 
 ```sh
 npm test
 npm run check
-python3 -m http.server 4173
 ```
 
-その後、`http://localhost:4173/`を開きます。build処理や`node_modules`は不要です。
+## 内部構造
 
-## GitHub Pages
-
-公開URL: https://ko-q.github.io/senki-suikoden-v10/
-
-初回のみRepositoryの **Settings → Pages → Build and deployment → Source** を
-**GitHub Actions** に設定します。その後、**Actions → Deploy GitHub Pages → Run workflow**
-で`main`を選んで実行すると公開できます。
-
-以後は`main`へのpushで`.github/workflows/pages.yml`が自動実行されます。
-Node.js 22で既存testとentry moduleの構文確認に成功した場合だけ、既存の`index.html`と
-`src/`・`styles/`・`assets/`を公開します。build toolや追加dependencyは不要です。
-設計資料とtestは公開artifactに含めません。
-
-スマートフォンでも上記URLを開き、初回tapでtitle openingを開始し、表示完了後にもう一度
-tapすると試験用Battleへ進めます。現在はMilestone 13の開発版であり、正式な全章版ではありません。
-
-v9とは別URLです。同じ`ko-q.github.io`内ではlocalStorageのoriginは共有されますが、
-既存のv10専用保存prefixによってv9の保存keyと分離します。
+- `Character` は人物の不変データ、`Unit` は兵力・向き・行動・状態異常を管理。
+- `BattleMap` は位置と占有、`ArmyManager` は所属、`StageFactory` は各章のruntime構築を担当。
+- `MovementService`、`CombatService`、`TacticService`、`AIService` はルールを担当。
+- `BattleController` は行動・イベント・勝敗の処理順を統括。`BattleLogRecorder` は確定済み結果の日本語ログを記録。
+- `BattlePresentationFactory` は確定した状態・結果を表示用snapshotへ変換し、`presentation-payload.js` が通知種別ごとの必須項目を検査。`unit-capabilities.js` は撹乱の能力上限と残り回数を考慮した使用可能上限を提供。
+- `LongPressGesture` は誤タップ防止、`UnitDetailView` は読み取り専用の能力表示を担当。
+- `BattleScreen` は画面上の選択・仮移動、`BattleRenderer` は描画、`PlayerShell` と `StageSelectionScreen` は画面遷移を担当。
+- `Game` と `BattleSessionHost` は新規開始・ロード・破棄を管理。新しい戦闘を検証してから交換。
+- Saveはdata-only形式。primary／temporary／backup、書込検証、競合検出、復旧を維持。
 
 ## 固定した互換境界
 
-- v9参照commit: `3e3fb85ca8279e5351668562dea677df777a1ddc`
-- v10 save format: `6`
-- v10 storage prefix: `senki_suikoden_v10_test_save_v1:`
-- PreviewはBattleMap、Unit、Army、乱数を変更しない
-- Unitは`x / y / team / army / isAlive / isDeployed / moveOrigin`を保持しない
+- V9参照commit：`3e3fb85ca8279e5351668562dea677df777a1ddc`
+- Save format：`6`
+- Content revision：`v10-v9-chapter-catalog-9`
+- 保存prefix：`senki_suikoden_v10_test_save_v1:`
+- V9の保存領域は読み書きしません。旧開発fixtureのSaveは今回の章catalogと非互換として保持します。
+- PreviewはBattleMap、Unit、Army、乱数を変更しません。
+- Unitは `x / y / team / army / isAlive / isDeployed / moveOrigin` を保持しません。
 
-設計正本と実ファイル照合記録は`docs/`にあります。
+最新の実装・検証記録は `docs/実装状況_Milestone_42.md`。公開の成否はGitHub Actionsの「Deploy GitHub Pages」と公開URLの実画面で確認します。

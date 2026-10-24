@@ -1,9 +1,9 @@
 /**
  * 公開版・保存形式・戦闘内容の版を別々に管理する。
  */
-export const GAME_VERSION = "10.0.0-dev.13";
+export const GAME_VERSION = "10.0.0-dev.42";
 export const SAVE_FORMAT_VERSION = 6;
-export const CONTENT_REVISION = "v10-save-transactional-load-8";
+export const CONTENT_REVISION = "v10-v9-chapter-catalog-9";
 
 /**
  * v9の保存領域には決して触れないv10専用prefix。

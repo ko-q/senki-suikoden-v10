@@ -12,10 +12,11 @@ import {
   validatePresentationRequest
 } from "../core/presentation-request.js";
 import { Stage, StagePhase } from "../domain/stage.js";
-import { UnitActionState } from "../domain/unit.js";
+import { Facing, UnitActionState } from "../domain/unit.js";
 import { BattleEffectManager } from "./battle-effect-manager.js";
 import { BattleRenderer } from "./battle-renderer.js";
 import { DialogueController } from "./dialogue-controller.js";
+import { directionBetween } from "../services/action-targeting-rules.js";
 
 export const InteractionMode = Object.freeze({
   UNIT_SELECT: "UNIT_SELECT",
@@ -65,6 +66,9 @@ export class BattleScreen {
   #commandPort;
   #mode;
   #selectedUnit;
+  #inspectedUnit = null;
+  #inspectedPosition = null;
+  #presentationUnitId = null;
   #reachableByKey;
   #previewDestination;
   #candidatePaths;
@@ -74,6 +78,7 @@ export class BattleScreen {
   #selectableTargets;
   #commandPending;
   #dialoguePending;
+  #missionPending = null;
   #disposed;
 
   constructor({ stage, renderer, effectManager, dialogueController = new DialogueController() }) {
@@ -114,7 +119,8 @@ export class BattleScreen {
       onNextDialogue: () => this.#handleNextDialogue(),
       onPath: () => this.#handlePath(),
       onTacticMenu: () => this.#handleTacticMenu(),
-      onWait: () => this.#handleWait()
+      onWait: () => this.#handleWait(),
+      onMissionStart: () => this.#finishMission()
     });
   }
 
@@ -139,9 +145,12 @@ export class BattleScreen {
       throw createAbortError();
     }
 
+    this.#updatePresentationFocus(request);
     this.refresh();
     if (request.type === PresentationRequestType.DIALOGUE) {
       await this.#presentDialogue(request.dialogue, abortSignal);
+    } else if (request.type === PresentationRequestType.MISSION_BRIEFING) {
+      await this.#presentMission(request.payload, abortSignal);
     } else {
       await this.#effectManager.present(request, abortSignal);
     }
@@ -166,6 +175,7 @@ export class BattleScreen {
       return;
     }
     this.#disposed = true;
+    if (this.#missionPending) this.#missionPending.handleAbort();
     if (this.#dialoguePending !== null) {
       const pending = this.#dialoguePending;
       this.#dialoguePending = null;
@@ -186,45 +196,50 @@ export class BattleScreen {
     if (cell === null) {
       return;
     }
-    if (
-      cell.occupant !== null
-      && this.#isSelectablePlayerUnit(cell.occupant)
-      && cell.occupant === this.#selectedUnit
-      && (
-        this.#mode === InteractionMode.CONFUSION_LEVEL_SELECT
-        || this.#isTargetSelectionMode()
-      )
-    ) {
-      this.#renderer.showInfo(
-        this.#mode === InteractionMode.CONFUSION_LEVEL_SELECT
-          ? "Choose a tactic before selecting a target."
-          : "Select a highlighted target."
-      );
+    // Preview stays in the presentation layer until a final command commits it.
+    if (this.#selectedUnit !== null && [InteractionMode.WAIT_FACING_SELECT, InteractionMode.TACTIC_FACING_SELECT, InteractionMode.MOVE_PREVIEW].includes(this.#mode)) {
+      const origin = this.#previewDestination ?? this.#stage.map.getPosition(this.#selectedUnit);
+      const dx = position.x - origin.x, dy = position.y - origin.y;
+      const normalAttack = this.#mode === InteractionMode.MOVE_PREVIEW && this.#selectableTargets.includes(cell.occupant);
+      if (!normalAttack && Math.abs(dx) + Math.abs(dy) === 1) {
+        if (this.#mode === InteractionMode.MOVE_PREVIEW) this.#mode = InteractionMode.WAIT_FACING_SELECT;
+        this.#handleFacing(dx === 1 ? Facing.EAST : dx === -1 ? Facing.WEST : dy === 1 ? Facing.SOUTH : Facing.NORTH);
+        return;
+      }
+      if (this.#mode !== InteractionMode.MOVE_PREVIEW) return;
+      if (!normalAttack) { this.#renderer.showInfo("向きを選ぶか、戻るで移動を取り消してください。"); return; }
+    }
+    // Target selection belongs to the current actor until Back is pressed,
+    // including when a different ally is tapped (V9 cellClick submodes).
+    if (this.#mode === InteractionMode.CONFUSION_LEVEL_SELECT) {
+      this.#renderer.showInfo("使用する撹乱のレベルを選んでください。");
       return;
     }
-    if (cell.occupant !== null && this.#isSelectablePlayerUnit(cell.occupant)) {
-      this.#selectUnit(cell.occupant);
+    if (this.#isTargetSelectionMode()) {
+      if (cell.occupant !== null && this.#selectableTargets.includes(cell.occupant)) {
+        this.#executeSelectedAction(cell.occupant);
+      } else {
+        this.#renderer.showInfo("赤い印の対象を選ぶか、戻るで取り消してください。");
+      }
+      return;
+    }
+    if (cell.occupant !== null && this.#stage.armyManager.playerArmy.has(cell.occupant)) {
+      if (this.#isSelectablePlayerUnit(cell.occupant)) {
+        this.#selectUnit(cell.occupant);
+      } else {
+        // V9 allows inspecting an unavailable ally after clearing an unmoved actor.
+        // Preview, target selection and committed-facing modes return above.
+        this.#clearSelection();
+        this.#inspectedUnit = cell.occupant;
+        this.#inspectedPosition = position;
+      }
       this.refresh();
       return;
     }
     if (this.#selectedUnit === null) {
-      return;
-    }
-
-    if (this.#mode === InteractionMode.CONFUSION_LEVEL_SELECT) {
-      this.#renderer.showInfo("Choose a tactic before selecting a target.");
-      return;
-    }
-
-    if (this.#isTargetSelectionMode()) {
-      if (
-        cell.occupant !== null
-        && this.#selectableTargets.includes(cell.occupant)
-      ) {
-        this.#executeSelectedAction(cell.occupant);
-      } else {
-        this.#renderer.showInfo("Select a highlighted target.");
-      }
+      this.#inspectedUnit = cell.occupant;
+      this.#inspectedPosition = position;
+      this.refresh();
       return;
     }
 
@@ -232,7 +247,7 @@ export class BattleScreen {
       if (this.#selectableTargets.includes(cell.occupant)) {
         this.#executeNormalAttack(cell.occupant);
       } else {
-        this.#renderer.showInfo("Target is out of range.");
+        this.#clearSelection(); this.#inspectedUnit = cell.occupant; this.refresh();
       }
       return;
     }
@@ -249,11 +264,22 @@ export class BattleScreen {
     }
     if (this.#reachableByKey.has(position.toKey())) {
       this.#previewAt(position);
+      const actor = this.#selectedUnit;
+      const path = this.#selectedPath();
+      if (this.#commandPort.canExecuteImmediateMove(actor, path)) {
+        // V9 resolves traps and a winning escape on the destination click.
+        this.#runCommand(
+          () => this.#commandPort.executeImmediateMove(actor, path),
+          () => this.#inspectAfterAction(actor)
+        );
+        return;
+      }
       this.refresh();
       return;
     }
 
     this.#clearSelection();
+    this.#inspectedPosition = position;
     this.refresh();
   }
 
@@ -264,8 +290,14 @@ export class BattleScreen {
     if (this.#mode === InteractionMode.TACTIC_FACING_SELECT) {
       return;
     }
-    if (this.#mode === InteractionMode.WAIT_FACING_SELECT) {
-      this.#returnToBaseSelection();
+    // V9 cancels an uncommitted move in one step from every submode.
+    if (this.#previewDestination !== null || this.#mode === InteractionMode.WAIT_FACING_SELECT) {
+      this.#clearPreview();
+    } else if ([InteractionMode.CONFUSION_LV1_TARGET_SELECT, InteractionMode.CONFUSION_LV2_TARGET_SELECT,
+      InteractionMode.CONFUSION_LV3_TARGET_SELECT].includes(this.#mode)) {
+      this.#selectedActionType = null;
+      this.#selectableTargets = [];
+      this.#mode = InteractionMode.CONFUSION_LEVEL_SELECT;
     } else if (
       this.#mode === InteractionMode.CONFUSION_LEVEL_SELECT
       || this.#isTargetSelectionMode()
@@ -301,6 +333,10 @@ export class BattleScreen {
     this.#selectedActionType = null;
     this.#selectableTargets = [];
     this.#mode = InteractionMode.CONFUSION_LEVEL_SELECT;
+    const directTactics = [ActionType.FIRE, ActionType.WATER, ActionType.ILLUSION].filter((type) => this.#availableActions.includes(type));
+    if (directTactics.length === 1 && !this.#availableActions.includes(ActionType.WIDE_ILLUSION)) {
+      this.#handleAction(directTactics[0]); return;
+    }
     this.refresh();
   }
 
@@ -349,7 +385,7 @@ export class BattleScreen {
       const path = this.#selectedPath();
       this.#runCommand(
         () => this.#commandPort.executeWait(actor, path, facing),
-        () => this.#clearSelection()
+        () => this.#inspectAfterAction(actor)
       );
       return;
     }
@@ -357,7 +393,7 @@ export class BattleScreen {
       const actor = this.#selectedUnit;
       this.#runCommand(
         () => this.#commandPort.finalizeTacticFacing(actor, facing),
-        () => this.#clearSelection()
+        () => this.#inspectAfterAction(actor)
       );
     }
   }
@@ -366,6 +402,8 @@ export class BattleScreen {
     if (!this.#canEndTurn()) {
       return;
     }
+    const unacted = this.#stage.unitOrder.filter((unit) => this.#isSelectablePlayerUnit(unit));
+    if (unacted.length && typeof globalThis.confirm === "function" && !globalThis.confirm(`未行動の味方部隊が${unacted.length}部隊います。\n${unacted.map((unit) => unit.character.name).join("、")}\n\nこのままターンを終了しますか？`)) return;
     this.#clearSelection();
     this.#runCommand(
       () => this.#commandPort.endPlayerTurn(),
@@ -391,6 +429,8 @@ export class BattleScreen {
   }
 
   #selectUnit(unit) {
+    this.#inspectedUnit = null;
+    this.#inspectedPosition = null;
     this.#selectedUnit = unit;
     this.#reachableByKey = new Map(
       this.#commandPort.getReachableCells(unit)
@@ -434,8 +474,13 @@ export class BattleScreen {
     const path = this.#selectedPath();
     this.#runCommand(
       () => this.#commandPort.executeAction(request, path),
-      () => this.#clearSelection()
+      () => this.#inspectAfterAction(actor)
     );
+  }
+
+  #inspectAfterAction(unit) {
+    this.#clearSelection();
+    if (unit.hasTroops() && this.#stage.map.getPosition(unit)) this.#inspectedUnit = unit;
   }
 
   async #runCommand(command, afterAccepted) {
@@ -510,6 +555,8 @@ export class BattleScreen {
   }
 
   #clearSelection() {
+    this.#inspectedUnit = null;
+    this.#inspectedPosition = null;
     this.#selectedUnit = null;
     this.#reachableByKey = new Map();
     this.#previewDestination = null;
@@ -557,6 +604,7 @@ export class BattleScreen {
       || this.#stage.phase !== StagePhase.PLAYER
       || this.#mode === InteractionMode.TACTIC_FACING_SELECT
       || this.#mode === InteractionMode.WAIT_FACING_SELECT
+      || this.#previewDestination !== null
     ) {
       return false;
     }
@@ -571,6 +619,7 @@ export class BattleScreen {
       || this.#commandPort === null
       || this.#commandPending
       || this.#dialogueController.isActive
+      || this.#missionPending !== null
       || this.#commandPort.getBattleResult() !== null
       || this.#commandPort.flowState !== BattleFlowState.IDLE;
   }
@@ -582,6 +631,9 @@ export class BattleScreen {
   #synchronizeFromDomain() {
     if (this.#commandPort === null) {
       return;
+    }
+    if (this.#commandPort.flowState === BattleFlowState.IDLE && this.#stage.phase === StagePhase.PLAYER) {
+      this.#presentationUnitId = null;
     }
     const committed = this.#stage.unitOrder.filter((unit) => (
       unit.actionState === UnitActionState.TACTIC_COMMITTED
@@ -610,19 +662,52 @@ export class BattleScreen {
       && this.#mode !== InteractionMode.TACTIC_FACING_SELECT
       && !this.#isSelectablePlayerUnit(this.#selectedUnit)
     ) {
+      const finished = this.#selectedUnit;
       this.#clearSelection();
+      if (finished.hasTroops()) this.#inspectedUnit = finished;
+    }
+  }
+
+  #updatePresentationFocus(request) {
+    if ([PresentationRequestType.PHASE, PresentationRequestType.DIALOGUE,
+      PresentationRequestType.MISSION_BRIEFING, PresentationRequestType.BATTLE_RESULT].includes(request.type)) {
+      this.#presentationUnitId = null;
+    } else if (request.type === PresentationRequestType.UNIT_FOCUS
+      || (request.type === PresentationRequestType.STATUS && request.payload.reason === "PHASE_START")) {
+      this.#presentationUnitId = request.payload.unitId;
+    } else if (request.type === PresentationRequestType.MOVE
+      && (this.#stage.phase === StagePhase.ENEMY || this.#presentationUnitId !== null)) {
+      this.#presentationUnitId = request.payload.unitId;
+    } else if (request.type === PresentationRequestType.ACTION
+      && (this.#stage.phase === StagePhase.ENEMY || request.payload.forced === true)) {
+      this.#presentationUnitId = request.payload.actorId;
     }
   }
 
   #createViewState() {
     const inputLocked = this.#isInputLocked();
+    const actingUnit = this.#presentationUnitId ? this.#stage.getUnit(this.#presentationUnitId) : null;
+    // Presentation focus never becomes a command selection or unlocks input.
+    const presentationPosition = inputLocked && actingUnit?.hasTroops()
+      && this.#commandPort.flowState !== BattleFlowState.FAULTED
+      && this.#commandPort.getBattleResult() === null
+      ? this.#stage.map.getPosition(actingUnit) : null;
+    const path = this.#selectedPath();
+    const previewFacing = !inputLocked && this.#previewDestination && path.length > 0
+      ? directionBetween(path.at(-2) ?? this.#stage.map.getPosition(this.#selectedUnit), path.at(-1))
+      : null;
     return Object.freeze({
       mode: this.#effectiveMode(),
+      battleFinished: this.#commandPort.getBattleResult() !== null,
       domainLabel: this.#domainLabel(),
       instruction: this.#instruction(),
-      selectedUnit: this.#selectedUnit,
+      selectedUnit: this.#selectedUnit ?? this.#inspectedUnit,
+      presentationPosition,
+      selectionPosition: this.#previewDestination
+        ?? ((this.#selectedUnit ?? this.#inspectedUnit) ? this.#stage.map.getPosition(this.#selectedUnit ?? this.#inspectedUnit) : this.#inspectedPosition),
       reachableByKey: this.#reachableByKey,
       previewDestination: this.#previewDestination,
+      previewFacing,
       candidatePaths: this.#candidatePaths,
       selectedPathIndex: this.#selectedPathIndex,
       availableActions: Object.freeze([...this.#availableActions]),
@@ -656,42 +741,63 @@ export class BattleScreen {
   #instruction() {
     const mode = this.#effectiveMode();
     if (this.#commandPort.getBattleResult() !== null) {
-      return "The development battle has finished.";
+      return "戦闘が終了しました。";
     }
     if (this.#commandPort.flowState === BattleFlowState.FAULTED) {
-      return "The battle stopped after an unexpected error.";
+      return "エラーが発生したため戦闘を停止しました。";
     }
     if (mode === InteractionMode.LOCKED) {
-      return "Resolving the current battle operation.";
+      return "行動を処理しています。";
     }
     if (mode === InteractionMode.UNIT_SELECT) {
-      return "Select a blue READY unit.";
+      return "行動する味方の部隊を選んでください。";
     }
     if (mode === InteractionMode.UNIT_SELECTED) {
-      return "Select a marked cell, tap an adjacent enemy, or choose an action.";
+      return "青い丸で移動、隣接する敵で攻撃します。";
     }
     if (mode === InteractionMode.MOVE_PREVIEW) {
-      return "Tap a red target, choose another action, or wait and select a facing.";
+      return "赤い印で攻撃、黄色のマスで向きを決めて待機します。";
     }
     if (mode === InteractionMode.CONFUSION_LEVEL_SELECT) {
-      return "Choose an available tactic. Confusion levels consume their level in uses.";
+      return "使用する計略を選んでください。撹乱はレベル分の回数を消費します。";
     }
     if (mode === InteractionMode.BOW_TARGET_SELECT) {
-      return "Select a highlighted projectile target at range 2 to 3.";
+      return "赤い印の遠距離攻撃対象を選んでください。";
     }
     if (mode === InteractionMode.CHARGE_TARGET_SELECT) {
-      return "Select a highlighted adjacent target for Charge.";
+      return "赤い印の敵を選んで突撃します。";
     }
     if (TARGET_SELECT_MODE_SET.has(mode)) {
-      return "Select a highlighted target for the chosen tactic.";
+      return "赤い印の計略対象を選んでください。";
     }
     if (mode === InteractionMode.WAIT_FACING_SELECT) {
-      return "Choose the final facing. Clear returns to movement preview.";
+      return "隣接する黄色のマスで向きを決定。戻るで移動を取り消します。";
     }
     if (mode === InteractionMode.TACTIC_FACING_SELECT) {
-      return "Choose the final facing for the committed tactic.";
+      return "隣接する黄色のマスで、計略後の向きを決めてください。";
     }
-    return "Select a valid target.";
+    return "対象を選んでください。";
+  }
+
+  #presentMission(briefing, abortSignal) {
+    this.#renderer.showMission(briefing);
+    return new Promise((resolve, reject) => {
+      const handleAbort = () => {
+        this.#missionPending = null;
+        abortSignal.removeEventListener("abort", handleAbort);
+        this.#renderer.hideMission(); reject(createAbortError());
+      };
+      this.#missionPending = { resolve, abortSignal, handleAbort };
+      abortSignal.addEventListener("abort", handleAbort, { once: true });
+      if (abortSignal.aborted) handleAbort();
+    });
+  }
+  #finishMission() {
+    const pending = this.#missionPending;
+    if (!pending) return;
+    this.#missionPending = null;
+    pending.abortSignal.removeEventListener("abort", pending.handleAbort);
+    this.#renderer.hideMission(); pending.resolve();
   }
 
   #presentDialogue(dialogue, abortSignal) {
@@ -721,9 +827,7 @@ export class BattleScreen {
   #renderCurrentDialogueSpeech() {
     const speech = this.#dialogueController.getCurrentSpeech();
     invariant(speech !== null, "BATTLE_SCREEN_SPEECH_REQUIRED");
-    const isLast = this.#dialogueController.currentIndex
-      === this.#dialogueController.dialogue.speeches.length - 1;
-    this.#renderer.renderDialogue(speech, isLast);
+    this.#renderer.renderDialogue(speech);
   }
 
   #scheduleRefresh() {

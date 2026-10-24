@@ -69,6 +69,7 @@ export {
   ReachObjective,
   SurviveUntilTurnObjective,
   TurnLimitObjective,
+  TurnLimitCheckpoint,
   UnitDefeatMatch,
   UnitDefeatObjective
 } from "./domain/objective.js";
@@ -93,11 +94,13 @@ export {
 } from "./domain/stage-event.js";
 export { Terrain, TerrainCatalog } from "./domain/terrain.js";
 export { UnitAbility, UnitUse } from "./domain/unit-ability.js";
+export { getConfusionLevel, getUsableConfusionLevel } from "./domain/unit-capabilities.js";
 export { UnitControlRule } from "./domain/unit-control-rule.js";
 export { Facing, Unit, UnitActionState, UnitStatus } from "./domain/unit.js";
 export { DEVELOPMENT_STAGE_DEFINITION } from "./definitions/development-stage.js";
 export { createV9CompatibleTerrainCatalog } from "./definitions/v9-compatible-terrain.js";
 export { StageFactory } from "./factories/stage-factory.js";
+export { BattlePresentationFactory } from "./factories/battle-presentation-factory.js";
 export { BattleController } from "./orchestration/battle-controller.js";
 export { BattleSessionFactory } from "./orchestration/battle-session-factory.js";
 export { BattleSession, BattleSessionHost } from "./orchestration/battle-session-host.js";
@@ -111,6 +114,12 @@ export {
   V9_BATTLE_RESULT_TIMING
 } from "./presentation/battle-result-effects.js";
 export { BattleRenderer } from "./presentation/battle-renderer.js";
+export { BattleMapView, resolveStageMapAsset } from "./presentation/battle-map-view.js";
+export { V9_STAGE_MAP_DEFINITIONS, getV9StageMapDefinition } from "./definitions/v9-stage-maps.js";
+export { ActionCutInSession, getActionCutIn, V9_ACTION_CUT_IN_TIMING } from "./presentation/action-cut-in.js";
+export { CharacterPortraitView } from "./presentation/character-portrait-view.js";
+export { getPortraitAsset, V9_PORTRAIT_ASSET_MANIFEST } from "./presentation/portrait-assets.js";
+export { getStageMapAsset, V9_STAGE_MAP_ASSET_MANIFEST } from "./presentation/stage-map-assets.js";
 export { BattleScreen, InteractionMode } from "./presentation/battle-screen.js";
 export {
   BattleVisualAssetId,
@@ -151,6 +160,7 @@ export { MovementService } from "./services/movement-service.js";
 export { CombatService } from "./services/combat-service.js";
 export {
   findTriggerableHiddenTrap,
+  findFirstTriggerableHiddenTrapOnPath,
   generateHiddenTraps,
   HiddenTrapEffect,
   resolveHiddenTrap
@@ -161,3 +171,5 @@ export {
   StatusService
 } from "./services/status-service.js";
 export { SaveCheckpointAdapter, SaveService } from "./services/save-service.js";
+export { createV9UnitProfile } from "./definitions/v9-unit-profile.js";
+export { createV9OpeningStageDefinition } from "./definitions/v9-opening-stages.js";

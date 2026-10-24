@@ -83,6 +83,8 @@ export class StageFactory {
     }
   }
 
+  getStageIds() { return Object.freeze([...this.#definitionsById.keys()]); }
+
   create(stageId) {
     const definition = this.#definitionsById.get(stageId);
     invariant(definition !== undefined, "STAGE_DEFINITION_NOT_FOUND", { stageId });
@@ -155,7 +157,9 @@ export class StageFactory {
     const speeches = optionalArray(definition.speeches, "STAGE_SPEECH_DEFINITIONS_INVALID").map(
       (speechDefinition) => new Speech({
         id: speechDefinition.id,
-        speaker: this.#getCharacter(runtimeCharactersById, speechDefinition.speakerCharacterId),
+        speaker: speechDefinition.narratorLabel !== undefined && speechDefinition.speakerCharacterId === undefined
+          ? null : this.#getCharacter(runtimeCharactersById, speechDefinition.speakerCharacterId),
+        narratorLabel: speechDefinition.narratorLabel,
         text: speechDefinition.text,
         actionLabel: speechDefinition.actionLabel
       })
@@ -247,6 +251,7 @@ export class StageFactory {
       hiddenTrapDefinitions,
       hiddenTraps: [],
       battleLog: new BattleLog(),
+      briefing: definition.briefing ?? null,
       introDialogue: getDialogueLink(definition.introDialogueId),
       victoryDialogue: getDialogueLink(definition.victoryDialogueId),
       defeatDialogue: getDialogueLink(definition.defeatDialogueId)
@@ -273,6 +278,7 @@ export class StageFactory {
         ? { trigger: definition.trigger }
         : { triggers: definition.triggers }),
       requiredCompletedEventIds: definition.requiredCompletedEventIds ?? [],
+      logMessages: definition.logMessages ?? [],
       interruptMovement: definition.interruptMovement ?? false,
       presentationRequests: this.#createPresentationRequests(
         definition.presentationRequests ?? [],
@@ -291,6 +297,7 @@ export class StageFactory {
           preferredPosition: deployment.preferredPosition
         })),
         targetArmy: this.#getArmy(armyManager, definition.targetArmy),
+        phase: definition.phase ?? null,
         turnAtLeast: definition.turnAtLeast ?? null,
         triggerUnit: this.#getOptionalUnit(unitsById, definition.triggerUnitId),
         requiredDefeatedUnits: optionalArray(
@@ -312,9 +319,11 @@ export class StageFactory {
           "BETRAYAL_UNIT_IDS_INVALID"
         ).map((unitId) => this.#getUnit(unitsById, unitId)),
         targetArmy: this.#getArmy(armyManager, definition.targetArmy),
+        phase: definition.phase ?? null,
         turnAtLeast: definition.turnAtLeast ?? null,
         newFacing: definition.newFacing ?? null,
         confusionTargetArmy,
+        skipPresentationWhenAllDefeated: definition.skipPresentationWhenAllDefeated ?? false,
         confusionTurns: definition.confusionTurns ?? 0
       });
     }
@@ -333,6 +342,7 @@ export class StageFactory {
     return new DialogueEvent({
       ...common,
       trapKinds: optionalArray(definition.trapKinds, "DIALOGUE_EVENT_TRAP_KINDS_INVALID"),
+      trapNeutralized: definition.trapNeutralized ?? null,
       triggerUnit: this.#getOptionalUnit(unitsById, definition.triggerUnitId),
       turnAtLeast: definition.turnAtLeast ?? null
     });
@@ -395,7 +405,8 @@ export class StageFactory {
           definition.unitIds,
           "UNIT_DEFEAT_OBJECTIVE_UNIT_IDS_INVALID"
         ).map((unitId) => this.#getUnit(unitsById, unitId)),
-        match: definition.match ?? UnitDefeatMatch.ANY
+        match: definition.match ?? UnitDefeatMatch.ANY,
+        requireDeployment: definition.requireDeployment ?? false
       });
     }
 
@@ -406,7 +417,8 @@ export class StageFactory {
       );
       return new TurnLimitObjective({
         ...common,
-        maxTurn: definition.maxTurn
+        maxTurn: definition.maxTurn,
+        checkpoint: definition.checkpoint
       });
     }
 

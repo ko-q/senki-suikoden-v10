@@ -1,3 +1,5 @@
+import { BATTLE_VIEW_ELEMENT_IDS } from "../src/presentation/battle-view.js";
+
 class FakeClassList {
   constructor() {
     this.values = new Set();
@@ -154,6 +156,10 @@ export class FakeElement {
         }
       }
     }
+    for (const child of this.children) {
+      const descendant = child?.querySelector?.(selector);
+      if (descendant) return descendant;
+    }
     return null;
   }
 
@@ -197,6 +203,7 @@ export function createFakeBattleElements() {
     dialogueNextButton: new FakeElement(),
     dialogueOverlay: new FakeElement(),
     dialogueSpeaker: new FakeElement(),
+    dialoguePortrait: new FakeElement(),
     dialogueText: new FakeElement(),
     domainValue: new FakeElement(),
     endTurnButton: new FakeElement(),
@@ -217,6 +224,7 @@ export function createFakeBattleElements() {
     resultEffectLayer: new FakeElement(),
     resetButton: new FakeElement(),
     selectedUnitText: new FakeElement(),
+    selectedUnitPortrait: new FakeElement(),
     tacticButton: new FakeElement(),
     tacticPanel: new FakeElement(),
     turnValue: new FakeElement(),
@@ -230,6 +238,8 @@ export function createFakeBattleElements() {
   elements.facingPanel.hidden = true;
   elements.resultEffectLayer.hidden = true;
   elements.tacticPanel.hidden = true;
+  for (const key of Object.keys(BATTLE_VIEW_ELEMENT_IDS)) elements[key] ??= new FakeElement();
+  elements.missionOverlay.hidden = true;
   return elements;
 }
 
@@ -278,6 +288,7 @@ export function createFakeGameResultElements() {
     details: new FakeElement(),
     message: new FakeElement(),
     newBattleButton: new FakeElement(),
+    nextBattleButton: new FakeElement(),
     overlay: new FakeElement(),
     title: new FakeElement()
   };

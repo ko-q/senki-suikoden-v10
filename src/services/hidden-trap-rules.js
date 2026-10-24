@@ -105,6 +105,35 @@ export function findTriggerableHiddenTrap(stage, unit, positionValue = null) {
 }
 
 /**
+ * 移動先の選択時に即時移動が必要か判定するため、経路順に最初のTrapを探す。
+ * 位置・Trap・乱数は変更しない。経路の到達可否はMovementServiceが検証する。
+ */
+export function findFirstTriggerableHiddenTrapOnPath(stage, unit, path) {
+  invariant(stage !== null && typeof stage === "object", "TRAP_STAGE_REQUIRED");
+  invariant(unit instanceof Unit, "TRAP_UNIT_REQUIRED");
+  invariant(stage.getUnits().includes(unit), "TRAP_UNIT_NOT_IN_STAGE", { unitId: unit.id });
+  invariant(Array.isArray(path), "TRAP_PATH_REQUIRED");
+  if (unit.hasAbility(UnitAbility.HIDDEN_TRAP_AWARENESS)
+    || stage.map.getPosition(unit) === null) {
+    return null;
+  }
+  const affiliation = stage.armyManager.getAffiliation(unit);
+  if (affiliation === null) {
+    return null;
+  }
+  const traps = stage.getHiddenTraps();
+  for (const step of path) {
+    const position = Position.from(step);
+    const trap = traps.find(candidate => candidate.position.equals(position)
+      && candidate.canTriggerFor(affiliation));
+    if (trap !== undefined) {
+      return trap;
+    }
+  }
+  return null;
+}
+
+/**
  * Trapのatomic効果だけを確定する。Map除去、Event、演出、actionStateはControllerが扱う。
  */
 export function resolveHiddenTrap(stage, unit, trap) {

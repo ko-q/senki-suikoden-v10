@@ -100,6 +100,7 @@ export class StageEvent {
     triggers = undefined,
     requiredCompletedEventIds = [],
     interruptMovement = false,
+    logMessages = [],
     presentationRequests = []
   }) {
     this.id = requireIdentifier(id, "STAGE_EVENT_ID_INVALID");
@@ -121,6 +122,8 @@ export class StageEvent {
     );
     invariant(typeof interruptMovement === "boolean", "STAGE_EVENT_INTERRUPT_INVALID");
     this.interruptMovement = interruptMovement;
+    invariant(Array.isArray(logMessages), "STAGE_EVENT_LOG_MESSAGES_INVALID");
+    this.logMessages = Object.freeze(logMessages.map((text) => requireNonEmptyString(text, "STAGE_EVENT_LOG_MESSAGE_INVALID")));
     this.presentationRequests = normalizePresentationRequests(presentationRequests);
     this.#requiredCompletedEvents = Object.freeze([]);
     this.#referencesResolved = false;
@@ -185,10 +188,12 @@ export class ReinforcementEvent extends StageEvent {
     requiredCompletedEventIds = [],
     deployments,
     targetArmy,
+    phase = null,
     turnAtLeast = null,
     triggerUnit = null,
     requiredDefeatedUnits = [],
     interruptMovement = false,
+    logMessages = [],
     presentationRequests = []
   }) {
     super({
@@ -198,6 +203,7 @@ export class ReinforcementEvent extends StageEvent {
       triggers,
       requiredCompletedEventIds,
       interruptMovement,
+      logMessages,
       presentationRequests
     });
     invariant(Array.isArray(deployments) && deployments.length > 0, "REINFORCEMENT_DEPLOYMENTS_REQUIRED");
@@ -217,6 +223,8 @@ export class ReinforcementEvent extends StageEvent {
     }));
     invariant(targetArmy instanceof Army, "REINFORCEMENT_TARGET_ARMY_REQUIRED");
     this.targetArmy = targetArmy;
+    invariant(phase === null || phase === "PLAYER" || phase === "ENEMY", "REINFORCEMENT_PHASE_INVALID");
+    this.phase = phase;
     this.turnAtLeast = normalizeOptionalTurn(turnAtLeast, "REINFORCEMENT_TURN_INVALID");
     invariant(triggerUnit === null || triggerUnit instanceof Unit, "REINFORCEMENT_TRIGGER_UNIT_INVALID");
     invariant(
@@ -230,6 +238,7 @@ export class ReinforcementEvent extends StageEvent {
   }
 
   canExecute(stage, payload = {}) {
+    if (this.phase !== null && stage.phase !== this.phase) return false;
     if (this.turnAtLeast !== null && stage.turn < this.turnAtLeast) {
       return false;
     }
@@ -348,11 +357,14 @@ export class BetrayalEvent extends StageEvent {
     requiredCompletedEventIds = [],
     units,
     targetArmy,
+    phase = null,
     turnAtLeast = null,
     newFacing = null,
     confusionTargetArmy = null,
     confusionTurns = 0,
+    skipPresentationWhenAllDefeated = false,
     interruptMovement = false,
+    logMessages = [],
     presentationRequests = []
   }) {
     super({
@@ -362,11 +374,14 @@ export class BetrayalEvent extends StageEvent {
       triggers,
       requiredCompletedEventIds,
       interruptMovement,
+      logMessages,
       presentationRequests
     });
     this.units = normalizeUnits(units, "BETRAYAL", false);
     invariant(targetArmy instanceof Army, "BETRAYAL_TARGET_ARMY_REQUIRED");
     this.targetArmy = targetArmy;
+    invariant(phase === null || phase === "PLAYER" || phase === "ENEMY", "BETRAYAL_PHASE_INVALID");
+    this.phase = phase;
     this.turnAtLeast = normalizeOptionalTurn(turnAtLeast, "BETRAYAL_TURN_INVALID");
     this.newFacing = newFacing === null
       ? null
@@ -382,6 +397,8 @@ export class BetrayalEvent extends StageEvent {
       Number.MAX_SAFE_INTEGER,
       "BETRAYAL_CONFUSION_TURNS_INVALID"
     );
+    invariant(typeof skipPresentationWhenAllDefeated === "boolean", "BETRAYAL_SKIP_PRESENTATION_INVALID");
+    this.skipPresentationWhenAllDefeated = skipPresentationWhenAllDefeated;
     invariant(
       (this.confusionTargetArmy === null && this.confusionTurns === 0)
         || (this.confusionTargetArmy !== null && this.confusionTurns > 0),
@@ -391,11 +408,15 @@ export class BetrayalEvent extends StageEvent {
   }
 
   canExecute(stage) {
-    return this.turnAtLeast === null || stage.turn >= this.turnAtLeast;
+    return (this.phase === null || stage.phase === this.phase)
+      && (this.turnAtLeast === null || stage.turn >= this.turnAtLeast);
   }
 
   execute(stage) {
     invariant(this.canExecute(stage), "BETRAYAL_EVENT_NOT_EXECUTABLE");
+    if (this.skipPresentationWhenAllDefeated && this.units.every((unit) => !unit.hasTroops())) {
+      return createStageEventResult({ completed: true, interruptMovement: this.interruptMovement });
+    }
     const managedArmies = [stage.armyManager.playerArmy, stage.armyManager.enemyArmy];
     invariant(managedArmies.includes(this.targetArmy), "BETRAYAL_ARMY_NOT_MANAGED");
     invariant(
@@ -469,6 +490,7 @@ export class MissionTransitionEvent extends StageEvent {
     requiredDefeatedUnits = [],
     turnAtLeast = null,
     interruptMovement = false,
+    logMessages = [],
     presentationRequests = []
   }) {
     super({
@@ -478,6 +500,7 @@ export class MissionTransitionEvent extends StageEvent {
       triggers,
       requiredCompletedEventIds,
       interruptMovement,
+      logMessages,
       presentationRequests
     });
     this.requiredDefeatedUnits = normalizeUnits(
@@ -522,9 +545,11 @@ export class DialogueEvent extends StageEvent {
     triggers = undefined,
     requiredCompletedEventIds = [],
     trapKinds = [],
+    trapNeutralized = null,
     triggerUnit = null,
     turnAtLeast = null,
     interruptMovement = false,
+    logMessages = [],
     presentationRequests = []
   }) {
     super({
@@ -534,6 +559,7 @@ export class DialogueEvent extends StageEvent {
       triggers,
       requiredCompletedEventIds,
       interruptMovement,
+      logMessages,
       presentationRequests
     });
     invariant(presentationRequests.length > 0, "DIALOGUE_EVENT_PRESENTATION_REQUIRED");
@@ -549,12 +575,17 @@ export class DialogueEvent extends StageEvent {
       "DIALOGUE_EVENT_TRAP_CONTEXT_INVALID"
     );
     invariant(triggerUnit === null || triggerUnit instanceof Unit, "DIALOGUE_EVENT_TRIGGER_UNIT_INVALID");
+    invariant(trapNeutralized === null || typeof trapNeutralized === "boolean", "DIALOGUE_EVENT_TRAP_RESULT_INVALID");
+    invariant(trapNeutralized === null || (this.triggers.length === 1 && this.triggers[0] === StageEventTrigger.TRAP_TRIGGERED),
+      "DIALOGUE_EVENT_TRAP_RESULT_CONTEXT_INVALID");
+    this.trapNeutralized = trapNeutralized;
     this.triggerUnit = triggerUnit;
     this.turnAtLeast = normalizeOptionalTurn(turnAtLeast, "DIALOGUE_EVENT_TURN_INVALID");
     Object.freeze(this);
   }
 
   canExecute(stage, payload = {}) {
+    if (this.trapNeutralized !== null && payload.result?.neutralized !== this.trapNeutralized) return false;
     if (this.turnAtLeast !== null && stage.turn < this.turnAtLeast) {
       return false;
     }

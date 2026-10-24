@@ -16,8 +16,6 @@ import { BattleFlowState } from "../core/battle-flow-state.js";
 import { invariant } from "../core/domain-error.js";
 import {
   createDialoguePresentationRequest,
-  createSemanticPresentationRequest,
-  PresentationRequestType,
   validatePresentationRequest
 } from "../core/presentation-request.js";
 import { BattleRandom } from "../domain/battle-random.js";
@@ -32,6 +30,7 @@ import {
 } from "../services/ai-service.js";
 import { CombatService } from "../services/combat-service.js";
 import {
+  findFirstTriggerableHiddenTrapOnPath,
   findTriggerableHiddenTrap,
   generateHiddenTraps,
   resolveHiddenTrap
@@ -42,6 +41,10 @@ import {
   StatusService
 } from "../services/status-service.js";
 import { TacticService } from "../services/tactic-service.js";
+import { BattleLogRecorder } from "../services/battle-log-recorder.js";
+import { BattlePresentationFactory } from "../factories/battle-presentation-factory.js";
+import { createTrapReactionDialogue } from "../factories/trap-dialogue-factory.js";
+import { directionBetween } from "../services/action-targeting-rules.js";
 
 export { BattleFlowState };
 
@@ -59,25 +62,13 @@ function copyPath(path) {
   return Object.freeze(path.map((position) => new Position(position.x, position.y)));
 }
 
-function positionPayload(position) {
-  if (position === null) {
-    return null;
-  }
-  return { x: position.x, y: position.y };
-}
-
-function statusEffectsPayload(unit) {
-  return unit.statusEffects.map((effect) => ({
-    type: effect.type,
-    remainingTurns: effect.remainingTurns
-  }));
-}
-
 /**
  * Domain更新順、非同期Presentation、phase進行を一か所で直列化する。
  */
 export class BattleController {
   #stage;
+  #logRecorder;
+  #presentationFactory;
   #battleRandom;
   #movementService;
   #combatService;
@@ -119,6 +110,8 @@ export class BattleController {
     invariant(statusService instanceof StatusService, "BATTLE_CONTROLLER_STATUS_SERVICE_REQUIRED");
     invariant(aiService instanceof AIService, "BATTLE_CONTROLLER_AI_SERVICE_REQUIRED");
     this.#stage = stage;
+    this.#logRecorder = new BattleLogRecorder(stage);
+    this.#presentationFactory = new BattlePresentationFactory(stage);
     this.#battleRandom = battleRandom;
     this.#movementService = movementService;
     this.#combatService = combatService;
@@ -209,6 +202,36 @@ export class BattleController {
     return Object.freeze(ALL_ACTION_TYPES.filter((actionType) => (
       this.getActionTargets(actionQueryContext, actionType).length > 0
     )));
+  }
+
+  canExecuteImmediateMove(actor, selectedPath) {
+    return this.#canIssuePlayerCommand(actor)
+      && Array.isArray(selectedPath)
+      && selectedPath.length > 0
+      && this.#movementService.validatePath(actor, selectedPath, this.#stage).valid
+      && (findFirstTriggerableHiddenTrapOnPath(this.#stage, actor, selectedPath) !== null
+        || this.#stage.objectiveManager.findReachVictoryAfterMove(
+          this.#stage, actor, selectedPath.at(-1)
+        ) !== null);
+  }
+
+  async executeImmediateMove(actor, selectedPath) {
+    if (!this.canExecuteImmediateMove(actor, selectedPath)) {
+      return false;
+    }
+    const path = copyPath(selectedPath);
+    this.#flowState = BattleFlowState.RESOLVING_ACTION;
+    try {
+      // V9 commits trap encounters and a winning escape on destination selection.
+      // Use the normal movement pipeline so the actual stop, defeat, events and
+      // checkpoint are resolved in order, without a second action/facing input.
+      await this.#executeWaitPlan(actor, path, null);
+      this.#returnToIdleAndCheckpoint();
+      return true;
+    } catch (error) {
+      this.#handleMutationFailure(error);
+      throw error;
+    }
   }
 
   getActionTargets(actionQueryContext, actionType) {
@@ -368,6 +391,9 @@ export class BattleController {
     if (this.#stage.introDialogue !== null) {
       await this.#present(createDialoguePresentationRequest(this.#stage.introDialogue));
     }
+    if (this.#stage.briefing !== null) {
+      await this.#present(this.#presentationFactory.missionBriefing());
+    }
     await this.#startPhase(1, StagePhase.PLAYER);
   }
 
@@ -386,15 +412,22 @@ export class BattleController {
     this.#throwIfDisposed();
     this.#flowState = BattleFlowState.TURN_TRANSITION;
     this.#stage.setTurnAndPhase(turn, phase);
-    await this.#present(createSemanticPresentationRequest(
-      PresentationRequestType.PHASE,
-      { turn, phase }
-    ));
+    this.#logRecorder.phase();
+    await this.#present(this.#presentationFactory.phase(turn, phase));
 
     await this.#resolveStageEventChain(StageEventTrigger.PHASE_START, { turn, phase });
     if (this.#latchedResult !== null) {
       await this.#finishBattle();
       return false;
+    }
+
+    if (phase === StagePhase.PLAYER) {
+      const deadline = this.#stage.objectiveManager.evaluatePlayerPhaseStartDefeat(this.#stage);
+      if (deadline !== null) {
+        this.#latchResult(BattleOutcome.DEFEAT, deadline);
+        await this.#finishBattle();
+        return false;
+      }
     }
 
     this.#resetUnitsForPhase();
@@ -445,20 +478,12 @@ export class BattleController {
       }
       processedUnitIds.add(unit.id);
       const statusResult = this.#statusService.processPhaseStart(unit);
+      this.#logRecorder.phaseStatus(unit, statusResult);
       if (statusResult === PhaseStartStatusResult.NONE) {
         continue;
       }
 
-      await this.#present(createSemanticPresentationRequest(
-        PresentationRequestType.STATUS,
-        {
-          reason: "PHASE_START",
-          unitId: unit.id,
-          position: positionPayload(this.#stage.map.getPosition(unit)),
-          statusResult,
-          statusEffects: statusEffectsPayload(unit)
-        }
-      ));
+      await this.#present(this.#presentationFactory.phaseStatus(unit, statusResult));
       if (unit.actionState !== UnitActionState.READY) {
         continue;
       }
@@ -489,6 +514,7 @@ export class BattleController {
 
       this.#flowState = BattleFlowState.RESOLVING_ACTION;
       const plan = this.#aiService.planEnemyTurn(unit, this.#stage);
+      await this.#present(this.#presentationFactory.unitFocus(unit));
       if (plan.kind === EnemyTurnPlanKind.ACTION) {
         invariant(
           this.#canAcceptAction(plan.request, plan.selectedPath, false),
@@ -610,17 +636,12 @@ export class BattleController {
       const from = this.#stage.map.getPosition(unit);
       const to = path[index];
       this.#stage.map.moveUnit(unit, to);
+      // Commit the direction with the step, before traps/events can stop movement.
+      unit.setFacing(directionBetween(from, to));
       if (unit.actionState === UnitActionState.READY) {
         unit.transitionActionState(UnitActionState.MOVED);
       }
-      await this.#present(createSemanticPresentationRequest(
-        PresentationRequestType.MOVE,
-        {
-          unitId: unit.id,
-          from: positionPayload(from),
-          to: positionPayload(to)
-        }
-      ));
+      await this.#present(this.#presentationFactory.move(unit, from, to));
 
       const trapResult = await this.#resolveTrapAtCurrentCell(unit);
       if (trapResult.terminal) {
@@ -636,7 +657,11 @@ export class BattleController {
           await this.#finishBattle();
           return Object.freeze({ completed: false, terminal: true });
         }
-        if (this.#resolveVictory()) {
+        // V9 checks escape after movement stops, not while crossing its zone.
+        const movementStopsHere = index === path.length - 1
+          || trapResult.interruptMovement
+          || !this.#canContinueMovement(unit);
+        if (movementStopsHere && this.#resolveVictory()) {
           await this.#finishBattle();
           return Object.freeze({ completed: false, terminal: true });
         }
@@ -660,10 +685,12 @@ export class BattleController {
 
     const result = resolveHiddenTrap(this.#stage, unit, trap);
     if (result.defeated) {
+      this.#finishUnitAction(unit);
       this.#stage.map.removeUnit(unit);
     }
     const defeated = this.#resolveDefeatCheckpoint();
     await this.#presentTrapResult(result);
+    await this.#present(createDialoguePresentationRequest(createTrapReactionDialogue(result)));
     if (defeated) {
       await this.#finishBattle();
       return Object.freeze({ interruptMovement: true, terminal: true });
@@ -687,6 +714,9 @@ export class BattleController {
   async #resolveActionConsequences(actor, operationType, result) {
     const defeatedUnits = this.#defeatedUnitsFromResult(result);
     for (const unit of defeatedUnits) {
+      // Friendly fire may defeat a READY ally during its own phase. Remove
+      // its pending action together with its placement before saving/events.
+      this.#finishUnitAction(unit);
       this.#stage.map.removeUnit(unit);
     }
 
@@ -745,6 +775,7 @@ export class BattleController {
       stage: this.#stage,
       payload,
       afterEventCompleted: (event) => {
+        this.#logRecorder.event(event);
         this.#activateControlledUnits(event);
         return this.#resolveDefeatCheckpoint();
       }
@@ -813,10 +844,8 @@ export class BattleController {
     const resultDialogue = this.#latchedResult.outcome === BattleOutcome.VICTORY
       ? this.#stage.victoryDialogue
       : this.#stage.defeatDialogue;
-    await this.#present(createSemanticPresentationRequest(
-      PresentationRequestType.BATTLE_RESULT,
-      this.#latchedResult
-    ));
+    this.#logRecorder.result(this.#latchedResult);
+    await this.#present(this.#presentationFactory.battleResult(this.#latchedResult));
     if (resultDialogue !== null) {
       await this.#present(createDialoguePresentationRequest(resultDialogue));
     }
@@ -826,101 +855,17 @@ export class BattleController {
   }
 
   async #presentAction(actionType, actor, target, forced) {
-    await this.#present(createSemanticPresentationRequest(
-      PresentationRequestType.ACTION,
-      {
-        actionType,
-        actorId: actor.id,
-        targetId: target?.id ?? null,
-        actorPosition: positionPayload(this.#stage.map.getPosition(actor)),
-        targetPosition: target === null
-          ? null
-          : positionPayload(this.#stage.map.getPosition(target)),
-        actorAffiliation: this.#stage.armyManager.getAffiliation(actor),
-        actorIsMob: this.#stage.mobCharacters.includes(actor.character),
-        forced
-      }
-    ));
+    await this.#present(this.#presentationFactory.action(actionType, actor, target, forced));
   }
 
   async #presentActionResult(actor, operationType, result) {
-    const targetResults = result.targetResults ?? [result];
-    const entries = targetResults.map((entry) => ({
-      unitId: (entry.unit ?? entry.target).id,
-      position: positionPayload(entry.position ?? entry.targetPosition),
-      beforeTroops: entry.troops.before,
-      afterTroops: entry.troops.after,
-      damage: entry.damage,
-      defeated: entry.defeated
-    }));
-    if (entries.some((entry) => entry.damage > 0)) {
-      await this.#present(createSemanticPresentationRequest(
-        PresentationRequestType.DAMAGE,
-        { operationType, actorId: actor.id, entries }
-      ));
-    }
-
-    const statusEntries = targetResults
-      .filter((entry) => JSON.stringify(entry.statusEffects.before)
-        !== JSON.stringify(entry.statusEffects.after))
-      .map((entry) => ({
-        unitId: (entry.unit ?? entry.target).id,
-        position: positionPayload(entry.position ?? entry.targetPosition),
-        before: entry.statusEffects.before,
-        after: entry.statusEffects.after,
-        effectTurns: entry.effectTurns ?? (entry.confusion?.success === true ? 1 : null)
-      }));
-    if (statusEntries.length > 0) {
-      await this.#present(createSemanticPresentationRequest(
-        PresentationRequestType.STATUS,
-        { reason: operationType, actorId: actor.id, entries: statusEntries }
-      ));
-    }
+    this.#logRecorder.action(actor, operationType, result);
+    await this.#presentAll(this.#presentationFactory.actionResult(actor, operationType, result));
   }
 
   async #presentTrapResult(result) {
-    await this.#present(createSemanticPresentationRequest(
-      PresentationRequestType.TRAP,
-      {
-        trapId: result.trap.id,
-        trapKind: result.trap.kind,
-        unitId: result.unit.id,
-        neutralized: result.neutralized,
-        damage: result.damage,
-        beforeTroops: result.beforeTroops,
-        afterTroops: result.afterTroops,
-        defeated: result.defeated,
-        statusChange: result.statusChange
-      }
-    ));
-    if (result.damage > 0) {
-      await this.#present(createSemanticPresentationRequest(
-        PresentationRequestType.DAMAGE,
-        {
-          operationType: "TRAP",
-          actorId: null,
-          entries: [{
-            unitId: result.unit.id,
-            position: positionPayload(result.trap.position),
-            beforeTroops: result.beforeTroops,
-            afterTroops: result.afterTroops,
-            damage: result.damage,
-            defeated: result.defeated
-          }]
-        }
-      ));
-    }
-    if (result.statusChange !== null) {
-      await this.#present(createSemanticPresentationRequest(
-        PresentationRequestType.STATUS,
-        {
-          reason: "TRAP",
-          unitId: result.unit.id,
-          position: positionPayload(result.trap.position),
-          statusChange: result.statusChange
-        }
-      ));
-    }
+    this.#logRecorder.trap(result);
+    await this.#presentAll(this.#presentationFactory.trapResult(result));
   }
 
   async #presentAll(requests) {

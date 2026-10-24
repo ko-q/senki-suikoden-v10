@@ -1,0 +1,52 @@
+' 2026-10-22: dev.40 の実コードを確認して作成。
+' 既存の設計図は保持。本ファイルは現在の主要クラスの抜粋。
+' PortはJavaScriptの構造契約。明示的なinterface宣言ではない。
+' 直近の検証記録: 2026-10-18、328テスト成功。この作図時には再実行していない。
+
+' 1ファイルにつき1図。PlantUML 1.2026.9で描画を検証。
+
+@startuml
+skinparam defaultFontName Meiryo
+title 戦旗水滸伝 dev.40 — 敵の移動を画面へ伝える流れ
+participant BattleController as Controller
+participant AIService as AI
+participant BattleMap as Map
+participant BattleScreen as Screen
+participant BattleRenderer as Renderer
+participant SelectionRingView as Ring
+participant BoardViewportLayout as Viewport
+participant BattleEffectManager as Effects
+
+note over Controller,Effects
+  敵ターンの通常行動から移動部分を抜粋。
+  ターン開始処理・罠・イベント・攻撃計算・勝敗判定は省略。
+end note
+Controller -> AI : selectNextEnemyUnit(stage)
+AI --> Controller : 対象部隊
+Controller -> AI : planEnemyTurn(unit, stage)
+AI --> Controller : 行動計画
+Controller -> Screen : present(UNIT_FOCUS, unitId)
+Screen -> Screen : 操作用選択とは別に表示対象を設定
+Screen -> Renderer : render(stage, viewState)
+Renderer -> Ring : render(stage, viewState)
+Renderer -> Viewport : keepCellVisible(position)
+Screen -> Effects : present(UNIT_FOCUS)
+Effects --> Screen : 追加待機0
+Screen --> Controller : 表示完了
+loop 確定移動の各マス
+  Controller -> Map : moveUnit(unit, position)
+  Controller -> Controller : Unitの向きを進行方向へ更新
+  Controller -> Screen : present(MOVE, unitId, from, to)
+  Screen -> Renderer : 確定位置を読み取って再描画
+  Renderer -> Ring : 移動先へ輪を表示
+  Renderer -> Viewport : 表示対象の位置変更時に追従
+  Screen -> Effects : present(MOVE)
+  Effects --> Screen : 移動演出完了
+  Screen --> Controller : 完了
+end
+note over Screen,Viewport
+  自動行動の表示中も入力ロックを維持。
+  攻撃・計略の演出要素が残る間はCSSで輪を隠す。
+  次の味方の操作開始時には自動行動の表示対象を解除。
+end note
+@enduml

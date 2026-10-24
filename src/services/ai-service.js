@@ -13,6 +13,7 @@ import {
 import { CombatService } from "./combat-service.js";
 import { MovementService } from "./movement-service.js";
 import { TacticService } from "./tactic-service.js";
+import { getUsableConfusionLevel } from "../domain/unit-capabilities.js";
 
 export const EnemyTurnPlanKind = Object.freeze({
   ACTION: "ACTION",
@@ -527,7 +528,7 @@ export class AIService {
         : createActionRequest(ActionType.ILLUSION, unit, best.target);
     }
 
-    const maximumLevel = this.#maximumConfusionLevel(unit);
+    const maximumLevel = getUsableConfusionLevel(unit);
     let best = null;
     for (const center of this.#enemyTargets(unit, stage)) {
       for (let level = 1; level <= maximumLevel; level += 1) {
@@ -695,20 +696,6 @@ export class AIService {
       return 0.75;
     }
     return 0.85;
-  }
-
-  #maximumConfusionLevel(unit) {
-    const uses = unit.remainingUses[UnitUse.TACTIC] ?? 0;
-    if (unit.hasAbility(UnitAbility.CONFUSION_LEVEL_3)) {
-      return Math.min(3, uses);
-    }
-    if (unit.hasAbility(UnitAbility.CONFUSION_LEVEL_2)) {
-      return Math.min(2, uses);
-    }
-    if (unit.hasAbility(UnitAbility.CONFUSION_LEVEL_1)) {
-      return Math.min(1, uses);
-    }
-    return 0;
   }
 
   #movementPrefix(unit, path, stage) {

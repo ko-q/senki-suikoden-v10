@@ -25,19 +25,23 @@ async function waitUntil(predicate, label) {
   throw new Error(`WAIT_TIMEOUT_${label}`);
 }
 
-test("bootstrap starts, saves manually, and swaps the Battle DOM without touching v9", async () => {
+test("bootstrap opens all nine chapters, starts the selected v9 battle, and loads without replaying intro or briefing", async () => {
   const { template, createdViews } = createFakeBattleViewTemplate();
   const battleHost = new FakeElement();
   const persistence = createFakePersistenceElements();
   const result = createFakeGameResultElements();
   const title = createFakeTitleElements();
+  const shell = Object.fromEntries(["stageSelectOverlay", "stageList", "stageSelectLoadButton", "closeSaveSlotsButton", "saveSlotOverlay", "closeBattleInfoButton", "battleInfoOverlay", "openSaveButton", "openLoadButton", "returnStageSelectButton", "battleInfoTitle", "battleInfoBody", "stageInfoActions", "persistenceTitle"].map((id) => [id, new FakeElement()]));
+  shell.stageSelectOverlay.hidden = true;
   const elementsBySelector = new Map([
     ["#battleHost", battleHost],
     ["#battleViewTemplate", template],
+    ...Object.entries(shell).map(([key, element]) => [`#${key}`, element]),
     ...Object.entries(persistence).map(([key, element]) => [`#${key}`, element]),
     ["#resultDetails", result.details],
     ["#resultMessage", result.message],
     ["#resultNewBattleButton", result.newBattleButton],
+    ["#resultNextBattleButton", result.nextBattleButton],
     ["#resultOverlay", result.overlay],
     ["#resultTitle", result.title],
     ["#titleBackground", title.background],
@@ -72,26 +76,37 @@ test("bootstrap starts, saves manually, and swaps the Battle DOM without touchin
     await waitUntil(() => title.root.classList.has("intro"), "TITLE_INTRO");
     await waitUntil(() => title.root.classList.has("ready"), "TITLE_READY");
     title.root.dispatch("click");
+    await waitUntil(() => !shell.stageSelectOverlay.hidden, "STAGE_MENU");
+    assert.equal(createdViews.length, 0);
+    assert.equal(shell.stageList.children.length, 9);
+    assert.equal(shell.stageList.children[0].children[0].textContent, "第一章　少華山への道");
+    shell.stageList.children[0].dispatch("click");
     await waitUntil(() => createdViews.length === 1, "TITLE_CLOSED");
     assert.equal(createdViews.length, 1);
     const firstView = createdViews[0];
     const { elements } = firstView;
     assert.equal(battleHost.children[0], firstView.root);
-    assert.equal(elements.board.children.length, 35);
+    assert.equal(elements.board.children.length, 128);
     assert.equal(elements.modeValue.textContent, "LOCKED");
     assert.equal(elements.dialogueOverlay.hidden, false);
     assert.equal(persistence.manualSlotList.children.length, 20);
     assert.equal(title.root.hidden, true);
-    assert.equal(persistence.audioButton.textContent, "Sound: ON");
+    assert.equal(persistence.audioButton.textContent, "音声：入");
 
     persistence.audioButton.dispatch("click");
-    assert.equal(persistence.audioButton.textContent, "Sound: OFF");
+    assert.equal(persistence.audioButton.textContent, "音声：切");
     assert.equal(persistence.audioButton.attributes.get("aria-pressed"), "false");
     persistence.audioButton.dispatch("click");
-    assert.equal(persistence.audioButton.textContent, "Sound: ON");
+    assert.equal(persistence.audioButton.textContent, "音声：入");
     assert.equal(persistence.audioButton.attributes.get("aria-pressed"), "true");
 
     elements.dialogueNextButton.dispatch("click");
+    assert.equal(elements.dialogueSpeaker.textContent, "朱武");
+    elements.dialogueNextButton.dispatch("click");
+    await waitUntil(() => !elements.missionOverlay.hidden, "MISSION_BRIEFING");
+    assert.equal(elements.missionVictory.textContent, "史進が北の旗へ到達、または敵軍を全滅");
+    assert.equal(elements.endTurnButton.disabled, true);
+    elements.missionStartButton.dispatch("click");
     await waitUntil(
       () => elements.modeValue.textContent === "UNIT_SELECT",
       "BATTLE_READY"
@@ -118,7 +133,7 @@ test("bootstrap starts, saves manually, and swaps the Battle DOM without touchin
     storage.removeItem(manualPrimaryKey);
     persistence.refreshSlotsButton.dispatch("click");
     const fallbackSlotActions = persistence.manualSlotList.children[0].children[2];
-    assert.equal(fallbackSlotActions.children[3].textContent, "Repair");
+    assert.equal(fallbackSlotActions.children[3].textContent, "修復");
     fallbackSlotActions.children[3].dispatch("click");
     assert.equal(storage.getItem(manualPrimaryKey), savedRaw);
     assert.equal(storage.getItem(manualTemporaryKey), null);
@@ -133,10 +148,19 @@ test("bootstrap starts, saves manually, and swaps the Battle DOM without touchin
     );
 
     assert.equal(battleHost.children[0], secondView.root);
+    assert.equal(secondView.elements.missionOverlay.hidden, true);
+    assert.equal(secondView.elements.dialogueOverlay.hidden, true);
     assert.equal(firstView.root.parentNode, null);
     assert.equal(firstView.elements.resetButton.listeners.has("click"), false);
     assert.equal(firstView.elements.board.children[0].listeners.has("click"), false);
     assert.equal(storage.getItem("senki_suikoden_save_v2"), "v9-untouched");
+    secondView.elements.stageInfoButton.dispatch("click");
+    assert.equal(shell.battleInfoTitle.textContent, "第一章　少華山への道");
+    shell.returnStageSelectButton.dispatch("click");
+    shell.stageList.children[8].dispatch("click");
+    assert.equal(createdViews.length, 3);
+    assert.equal(createdViews[2].elements.board.children.length, 160);
+    assert.equal(firstView.elements.stageInfoButton.listeners.has("click"), false);
   } finally {
     globalThis.document = previousDocument;
     if (previousLocalStorage === undefined) {

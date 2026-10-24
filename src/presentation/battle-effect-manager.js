@@ -6,7 +6,9 @@ import {
 import { BattleRenderer } from "./battle-renderer.js";
 
 const DEFAULT_DURATIONS = Object.freeze({
+  [PresentationRequestType.MISSION_BRIEFING]: 0,
   [PresentationRequestType.NOTICE]: 0,
+  [PresentationRequestType.UNIT_FOCUS]: 0,
   [PresentationRequestType.MOVE]: 70,
   [PresentationRequestType.ACTION]: 100,
   [PresentationRequestType.DAMAGE]: 120,
@@ -72,13 +74,15 @@ export class BattleEffectManager {
   #audioSession;
   #visualSession;
   #resultSession;
+  #cutInSession;
 
   constructor({
     renderer,
     durations = {},
     audioSession = null,
     visualSession = null,
-    resultSession = null
+    resultSession = null,
+    cutInSession = null
   }) {
     invariant(renderer instanceof BattleRenderer, "BATTLE_EFFECT_RENDERER_REQUIRED");
     invariant(
@@ -114,6 +118,9 @@ export class BattleEffectManager {
     this.#audioSession = audioSession;
     this.#visualSession = visualSession;
     this.#resultSession = resultSession;
+    invariant(cutInSession === null || (typeof cutInSession.present === "function"
+      && typeof cutInSession.dispose === "function"), "BATTLE_EFFECT_CUT_IN_SESSION_INVALID");
+    this.#cutInSession = cutInSession;
   }
 
   async present(request, abortSignal) {
@@ -123,6 +130,12 @@ export class BattleEffectManager {
       request.type !== PresentationRequestType.DIALOGUE,
       "BATTLE_EFFECT_DIALOGUE_FORBIDDEN"
     );
+    const durationOverride = this.#durationOverrideTypes.has(request.type)
+      ? this.#durations[request.type] : undefined;
+    if (this.#cutInSession !== null) {
+      await this.#cutInSession.present(request, abortSignal, durationOverride);
+    }
+    if (abortSignal.aborted) throw createAbortError();
     let audioHandle = null;
     if (this.#audioSession !== null) {
       try {
@@ -133,9 +146,6 @@ export class BattleEffectManager {
     }
     this.#renderer.renderPresentation(request);
     try {
-      const durationOverride = this.#durationOverrideTypes.has(request.type)
-        ? this.#durations[request.type]
-        : undefined;
       const resultHandled = this.#resultSession === null
         ? false
         : await this.#resultSession.present(
@@ -157,6 +167,10 @@ export class BattleEffectManager {
   }
 
   dispose() {
+    if (this.#cutInSession !== null) {
+      this.#cutInSession.dispose();
+      this.#cutInSession = null;
+    }
     if (this.#resultSession !== null) {
       const resultSession = this.#resultSession;
       this.#resultSession = null;

@@ -2,10 +2,12 @@ import { invariant } from "../core/domain-error.js";
 import { validatePresentationRequest } from "../core/presentation-request.js";
 
 const BATTLE_COMMAND_METHODS = Object.freeze([
+  "canExecuteImmediateMove",
   "createSaveSnapshot",
   "dispose",
   "endPlayerTurn",
   "executeAction",
+  "executeImmediateMove",
   "executeWait",
   "finalizeTacticFacing",
   "getActionTargets",

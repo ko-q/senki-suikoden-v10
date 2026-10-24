@@ -8,11 +8,33 @@ import { Position } from "../src/domain/position.js";
 import { UnitAbility } from "../src/domain/unit-ability.js";
 import { UnitStatus } from "../src/domain/unit.js";
 import {
+  findFirstTriggerableHiddenTrapOnPath,
   findTriggerableHiddenTrap,
   generateHiddenTraps,
   resolveHiddenTrap
 } from "../src/services/hidden-trap-rules.js";
 import { createStage } from "../test-support/fixtures.js";
+
+test("path trap queries follow travel order without moving or consuming traps", () => {
+  const stage = createStage({ id: "path_traps" });
+  const player = stage.getUnit("path_traps_player"), enemy = stage.getUnit("path_traps_enemy");
+  const originalPosition = stage.map.getPosition(player);
+  const traps = [2, 1].map(x => new HiddenTrap({ id: `trap_${x}`, kind: HiddenTrapKind.NORMAL,
+    position: { x, y: 1 }, triggerAffiliations: [Affiliation.PLAYER] }));
+  traps.forEach(trap => stage.addHiddenTrap(trap));
+  const path = [{ x: 1, y: 1 }, { x: 2, y: 1 }];
+  assert.equal(findFirstTriggerableHiddenTrapOnPath(stage, player, path), traps[1]);
+  assert.equal(findFirstTriggerableHiddenTrapOnPath(stage, enemy, path), null);
+  assert.equal(findFirstTriggerableHiddenTrapOnPath(stage, player, []), null);
+  assert.equal(findTriggerableHiddenTrap(stage, player, path[0]), null, "future cells cannot apply trap damage");
+  assert.deepEqual(stage.map.getPosition(player), originalPosition);
+  assert.equal(player.troops, player.maxTroops);
+  assert.equal(traps.every(trap => trap.active), true);
+  traps[1].deactivate();
+  assert.equal(findFirstTriggerableHiddenTrapOnPath(stage, player, path), traps[0]);
+  traps[0].deactivate();
+  assert.equal(findFirstTriggerableHiddenTrapOnPath(stage, player, path), null);
+});
 
 test("Hidden Trap generation matches the v9 candidate order and seeded splice selection", () => {
   const stage = createStage({

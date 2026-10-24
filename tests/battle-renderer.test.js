@@ -34,6 +34,103 @@ function bindNoopHandlers(renderer) {
   });
 }
 
+test("presentation focus follows offscreen enemies while commands stay locked and stops following after it clears", () => {
+  const restore = installFakeDocument();
+  const stage = createServiceStage({ map: Array.from({ length: 10 }, () => ["plain"]),
+    units: [{ id: "enemy", position: { x: 0, y: 8 } }] });
+  stage.setTurnAndPhase(1, "ENEMY");
+  const elements = createFakeBattleElements();
+  const scroll = elements.boardScroll;
+  Object.assign(scroll, { scrollTop: 0, scrollLeft: 0, clientHeight: 144, clientWidth: 144,
+    scrollHeight: 480, scrollWidth: 144, getBoundingClientRect: () => ({ top: 0, bottom: 144, left: 0, right: 144 }) });
+  for (const element of [elements.battleToolbar, elements.commandDock]) element.getClientRects = () => [];
+  elements.board.querySelector = (selector) => {
+    const y = Number(selector.match(/data-y="(\d+)"/)?.[1]);
+    return elements.board.children[y] ? { getBoundingClientRect: () => ({
+      top: y * 48 - scroll.scrollTop, bottom: (y + 1) * 48 - scroll.scrollTop, left: 48, right: 96
+    }) } : null;
+  };
+  const renderer = new BattleRenderer(elements);
+  const view = { mode: "LOCKED", selectedUnit: null, selectionPosition: null, previewDestination: null,
+    reachableByKey: new Map(), candidatePaths: [], selectedPathIndex: 0, availableActions: [], selectableTargets: [],
+    inputLocked: true, showPrimaryCommands: false, showTacticPanel: false, showFacingPanel: false };
+  try {
+    bindNoopHandlers(renderer);
+    const before = createStageDigest(stage);
+    renderer.render(stage, { ...view, presentationPosition: new Position(0, 8) });
+    assert.equal(scroll.scrollTop, 300);
+    assert.equal(elements.commandDock.hidden, true);
+    assert.equal(elements.battleToolbar.hidden, true);
+    scroll.scrollTop = 320;
+    renderer.render(stage, { ...view, presentationPosition: new Position(0, 8) });
+    assert.equal(scroll.scrollTop, 320, "an ordinary refresh does not undo manual scrolling");
+    renderer.render(stage, { ...view, presentationPosition: new Position(0, 1) });
+    assert.equal(scroll.scrollTop, 36);
+    renderer.render(stage, { ...view, selectionPosition: new Position(0, 9) });
+    assert.equal(scroll.scrollTop, 36, "locked command selections cannot move the viewport");
+    assert.equal(createStageDigest(stage), before);
+  } finally { renderer.unbindHandlers(); restore(); }
+});
+
+test("waiting-unit labels follow event state without hiding independent confusion and illusion", () => {
+  const restore = installFakeDocument();
+  const stage = createServiceStage({ map: [["plain", "plain", "plain"]],
+    units: ["infiltrator", "defector", "cart"].map((id, x) => ({ id, army: "ENEMY", position: { x, y: 0 }, actionState: "FINISHED" })),
+    events: [{ id: "arrival", type: "MISSION_TRANSITION", trigger: "AFTER_OPERATION" }],
+    unitControlRules: [
+      { unitId: "infiltrator", inactiveUntilEventId: "arrival", actionLabel: "潜入待機" },
+      { unitId: "defector", inactiveUntilEventId: "arrival", actionLabel: "陣中待機" },
+      { unitId: "cart", alwaysInactive: true }
+    ] });
+  const elements = createFakeBattleElements(), renderer = new BattleRenderer(elements);
+  const view = { mode: "UNIT_SELECT", previewDestination: null, reachableByKey: new Map(), candidatePaths: [], selectedPathIndex: 0,
+    availableActions: [], selectableTargets: [], inputLocked: false, showPrimaryCommands: false, showTacticPanel: false, showFacingPanel: false };
+  try {
+    bindNoopHandlers(renderer);
+    const unit = stage.getUnit("infiltrator"); unit.setStatus("CONFUSED", 2); unit.setStatus("ILLUSION", 1);
+    const before = createStageDigest(stage);
+    renderer.render(stage, { ...view, selectedUnit: unit });
+    assert.match(elements.selectedUnitText.textContent, /撹乱2/); assert.match(elements.selectedUnitText.textContent, /幻術1/);
+    assert.match(elements.selectedUnitText.textContent, /潜入待機/);
+    renderer.render(stage, { ...view, selectedUnit: stage.getUnit("defector") });
+    assert.match(elements.selectedUnitText.textContent, /陣中待機/);
+    assert.equal(createStageDigest(stage), before);
+    stage.eventManager.resolveChain({ stage, trigger: "AFTER_OPERATION" });
+    renderer.render(stage, { ...view, selectedUnit: unit });
+    assert.doesNotMatch(elements.selectedUnitText.textContent, /潜入待機/);
+    assert.match(elements.selectedUnitText.textContent, /撹乱2/); assert.match(elements.selectedUnitText.textContent, /幻術1/);
+    stage.eventManager.restoreCompletedEventIds([]);
+    renderer.render(stage, { ...view, selectedUnit: stage.getUnit("defector") });
+    assert.match(elements.selectedUnitText.textContent, /陣中待機/);
+    stage.setTurnAndPhase(1, "ENEMY");
+    renderer.render(stage, { ...view, selectedUnit: stage.getUnit("cart") });
+    assert.match(elements.selectedUnitText.textContent, /状態 通常/);
+    assert.deepEqual(stage.battleLog.getEntries(), []);
+  } finally { renderer.unbindHandlers(); restore(); }
+});
+
+test("V9 escape flags remain landmarks while mission activation follows restored event state", () => {
+  const restore = installFakeDocument();
+  const stage = createServiceStage({ map: [["plain", "plain"]], units: [{ id: "actor", army: "PLAYER", position: { x: 0, y: 0 } }],
+    events: [{ id: "clear_convoy", type: "MISSION_TRANSITION", trigger: "AFTER_OPERATION" }],
+    objectives: [{ id: "escape", type: "REACH", outcome: "VICTORY", unitIds: ["actor"], destination: { x: 1, y: 0 }, radius: 0, activeAfterEventId: "clear_convoy" }] });
+  const elements = createFakeBattleElements(), renderer = new BattleRenderer(elements);
+  const view = { mode: "IDLE", selectedUnit: null, previewDestination: null, reachableByKey: new Map(), candidatePaths: [], selectedPathIndex: 0,
+    availableActions: [], selectableTargets: [], inputLocked: false, showPrimaryCommands: false, showTacticPanel: false, showFacingPanel: false };
+  const hasFlag = () => elements.board.children[1].children.some((child) => child.className === "escape-flag");
+  try {
+    bindNoopHandlers(renderer); renderer.render(stage, view); assert.equal(hasFlag(), true);
+    assert.equal(elements.board.children[1].classList.has("escape-zone"), false);
+    stage.eventManager.resolveChain({ stage, trigger: "AFTER_OPERATION" });
+    renderer.render(stage, view); assert.equal(hasFlag(), true);
+    assert.equal(elements.board.children[1].classList.has("escape-zone"), true);
+    stage.eventManager.restoreCompletedEventIds([]); renderer.render(stage, view); assert.equal(hasFlag(), true);
+    assert.equal(elements.board.children[1].classList.has("escape-zone"), false);
+    stage.eventManager.restoreCompletedEventIds(["clear_convoy"]); renderer.render(stage, view);
+    assert.equal(elements.board.children[1].classList.has("escape-zone"), true);
+  } finally { renderer.unbindHandlers(); restore(); }
+});
+
 test("BattleRenderer draws Stage and Preview without changing Domain", () => {
   const restoreDocument = installFakeDocument();
   try {
@@ -83,6 +180,31 @@ test("BattleRenderer draws Stage and Preview without changing Domain", () => {
   } finally {
     restoreDocument();
   }
+});
+
+test("BattleRenderer uses the speaker portrait key and clears it on hide and unbind", () => {
+  const restore = installFakeDocument();
+  try {
+    const elements = createFakeBattleElements();
+    const renderer = new BattleRenderer(elements);
+    bindNoopHandlers(renderer);
+    const speech = { speaker: Object.freeze({ name: "宋江", portraitKey: "song_jiang" }), text: "台詞", actionLabel: "味方救援" };
+    renderer.renderDialogue(speech);
+    assert.equal(elements.dialoguePortrait.hidden, false);
+    assert.equal(elements.dialoguePortrait.children[0].alt, "宋江");
+    assert.equal(elements.dialogueAction.textContent, "味方救援");
+    assert.equal(elements.dialogueAction.hidden, false);
+    renderer.hideDialogue();
+    assert.equal(elements.dialoguePortrait.hidden, true);
+    assert.equal(elements.dialogueAction.hidden, true);
+    assert.equal(elements.dialogueAction.textContent, "");
+    renderer.renderDialogue({ ...speech, actionLabel: undefined });
+    assert.equal(elements.dialogueAction.hidden, true);
+    const image = elements.dialoguePortrait.children[0];
+    renderer.unbindHandlers();
+    assert.equal(image.listeners.size, 0);
+    assert.equal(elements.dialoguePortrait.children.length, 0);
+  } finally { restore(); }
 });
 
 test("BattleEffectManager renders semantic results and aborts its own wait", async () => {
@@ -243,9 +365,9 @@ test("BattleRenderer exposes projectile, charge and tactic controls from ViewSta
       showFacingPanel: false
     });
 
-    assert.equal(elements.bowButton.textContent, "Throw 2/2");
-    assert.equal(elements.chargeButton.textContent, "Charge 3/3");
-    assert.equal(elements.tacticButton.textContent, "Tactic 4/4");
+    assert.equal(elements.bowButton.textContent, "投擲 2/2");
+    assert.equal(elements.chargeButton.textContent, "突撃 3/3");
+    assert.equal(elements.tacticButton.textContent, "火計 4/4");
     assert.equal(elements.bowButton.disabled, false);
     assert.equal(elements.confusionLv2Button.disabled, false);
     assert.equal(elements.confusionLv3Button.disabled, true);

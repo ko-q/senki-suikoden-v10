@@ -126,8 +126,8 @@ export class BattleResultEffectSession {
     root.setAttribute(
       "aria-label",
       victory
-        ? "Victory sequence. Wait for the prompt before continuing."
-        : "Defeat sequence. Wait for the prompt before continuing."
+        ? "勝利演出。案内が表示されるまでお待ちください。"
+        : "敗北演出。案内が表示されるまでお待ちください。"
     );
     root.tabIndex = 0;
 
@@ -142,11 +142,11 @@ export class BattleResultEffectSession {
     const title = this.#createImage(
       victory ? "victory-effect-title" : "defeat-effect-title",
       victory ? ScreenVisualAssetId.VICTORY_TITLE : ScreenVisualAssetId.DEFEAT_TITLE,
-      victory ? "Victory" : "Defeat"
+      victory ? "勝利" : "敗北"
     );
     const prompt = document.createElement("div");
     addClassNames(prompt, "battle-result-prompt");
-    prompt.textContent = "Tap to continue";
+    prompt.textContent = "タップして続ける";
     prompt.setAttribute("aria-hidden", "true");
 
     const rays = victory
@@ -190,7 +190,7 @@ export class BattleResultEffectSession {
       root.classList.add("is-ready");
       root.removeEventListener("keydown", handlePreReadyKeydown);
       root.setAttribute("aria-disabled", "false");
-      root.setAttribute("aria-label", victory ? "Victory. Tap to continue." : "Defeat. Tap to continue.");
+      root.setAttribute("aria-label", victory ? "勝利。タップして続ける。" : "敗北。タップして続ける。");
       prompt.setAttribute("aria-hidden", "false");
 
       if (durationOverride === undefined) {

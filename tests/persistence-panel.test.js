@@ -102,9 +102,9 @@ test("PersistencePanel renders slot capabilities and confirms destructive action
     assert.equal(incompatibleActions.children[1].disabled, true);
     assert.equal(incompatibleActions.children[2].disabled, false);
     assert.equal(temporaryActions.children.length, 4);
-    assert.equal(temporaryActions.children[3].textContent, "Repair");
+    assert.equal(temporaryActions.children[3].textContent, "修復");
     assert.equal(backupActions.children.length, 4);
-    assert.equal(backupActions.children[3].textContent, "Repair");
+    assert.equal(backupActions.children[3].textContent, "修復");
     assert.equal(protectedBackupActions.children.length, 3);
 
     occupiedActions.children[0].dispatch("click");
@@ -128,7 +128,7 @@ test("PersistencePanel renders slot capabilities and confirms destructive action
     const recovery = inspection("recovery", "occupied", summary("recovery"));
     panel.showRecoveryPrompt(recovery);
     assert.equal(elements.recoveryOverlay.hidden, false);
-    assert.match(elements.recoverySummary.textContent, /Turn 3/);
+    assert.match(elements.recoverySummary.textContent, /3ターン目/);
     elements.resumeRecoveryButton.dispatch("click");
     assert.deepEqual(events.at(-1), ["resume", "occupied"]);
     panel.hideRecoveryPrompt();

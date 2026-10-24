@@ -648,6 +648,20 @@ button {
   cursor: default;
 }
 
+.cell[data-terrain="mountain"] {
+  background: #706950;
+}
+
+.board[data-map-ready="true"] {
+  background-repeat: no-repeat;
+  background-origin: padding-box;
+  background-clip: padding-box;
+}
+
+.board[data-map-ready="true"] > .cell {
+  background: transparent;
+}
+
 .cell.is-reachable::before {
   position: absolute;
   inset: 22%;
@@ -1287,6 +1301,29 @@ button {
   place-items: end center;
   padding: 1rem max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom));
   background: rgb(0 0 0 / 0.58);
+}
+
+.character-portrait[hidden] { display: none; }
+.character-portrait {
+  flex: 0 0 auto;
+  width: 108px;
+  aspect-ratio: 216 / 256;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.character-portrait-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+.selected-character { display: flex; align-items: center; gap: 12px; }
+.selected-portrait { width: 54px; }
+.dialogue-portrait { float: left; margin: 0 16px 12px 0; }
+.dialogue-card { display: flow-root; }
+@media (max-width: 480px) {
+  .dialogue-portrait { width: 81px; margin-right: 12px; }
 }
 
 .dialogue-card {

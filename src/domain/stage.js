@@ -51,6 +51,7 @@ export class Stage {
     hiddenTrapDefinitions = [],
     hiddenTraps = [],
     battleLog = new BattleLog(),
+    briefing = null,
     introDialogue = null,
     victoryDialogue = null,
     defeatDialogue = null
@@ -113,6 +114,8 @@ export class Stage {
     );
     this.#hiddenTraps = [...hiddenTraps];
     this.battleLog = battleLog;
+    invariant(briefing === null || (typeof briefing.victory === "string" && typeof briefing.defeat === "string"), "STAGE_BRIEFING_INVALID");
+    this.briefing = briefing === null ? null : Object.freeze({ victory: briefing.victory, defeat: briefing.defeat });
 
     for (const dialogue of [introDialogue, victoryDialogue, defeatDialogue]) {
       invariant(dialogue === null || dialogue instanceof Dialogue, "STAGE_DIALOGUE_LINK_INVALID");

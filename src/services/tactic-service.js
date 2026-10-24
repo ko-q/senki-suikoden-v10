@@ -5,6 +5,7 @@ import { Position } from "../domain/position.js";
 import { Stage } from "../domain/stage.js";
 import { Facing, Unit, UnitStatus } from "../domain/unit.js";
 import { UnitAbility, UnitUse } from "../domain/unit-ability.js";
+import { getConfusionLevel } from "../domain/unit-capabilities.js";
 import {
   directionBetween,
   getLivingUnitsInOrder,
@@ -480,20 +481,7 @@ export class TacticService {
     if (actionType === ActionType.WATER) {
       return actor.hasAbility(UnitAbility.WATER_TACTIC);
     }
-    return this.#maximumConfusionLevel(actor) >= this.#levelFor(actionType);
-  }
-
-  #maximumConfusionLevel(actor) {
-    if (actor.hasAbility(UnitAbility.CONFUSION_LEVEL_3)) {
-      return 3;
-    }
-    if (actor.hasAbility(UnitAbility.CONFUSION_LEVEL_2)) {
-      return 2;
-    }
-    if (actor.hasAbility(UnitAbility.CONFUSION_LEVEL_1)) {
-      return 1;
-    }
-    return 0;
+    return getConfusionLevel(actor) >= this.#levelFor(actionType);
   }
 
   #levelFor(actionType) {

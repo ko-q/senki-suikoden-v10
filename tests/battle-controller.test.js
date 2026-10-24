@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { createActionQueryContext } from "../src/core/action-query-context.js";
 import { createActionRequest, ActionType } from "../src/core/action-request.js";
 import { BattleOutcome } from "../src/core/battle-result.js";
 import { PresentationRequestType } from "../src/core/presentation-request.js";
@@ -245,6 +246,251 @@ test("a failed player commit changes neither Domain nor BattleRandom", async () 
   await disposePendingBattle(runtime, completion);
 });
 
+test("committed movement faces along each step before presentation and preserves the chosen wait facing", async () => {
+  const stage = createServiceStage({ id: "movement_facing", map: Array.from({ length: 3 }, () => Array(4).fill("plain")),
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 2 }, facing: Facing.SOUTH },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 3, y: 0 } }] });
+  const actor = stage.getUnit("actor"), steps = [];
+  const runtime = createControllerRuntime(stage, { presentationPort: { async present(request) {
+    if (request.type === PresentationRequestType.MOVE) steps.push({ position: stage.map.getPosition(actor).toKey(), facing: actor.facing });
+  } } });
+  const { completion } = await startNewBattle(runtime);
+  try {
+    const random = runtime.battleRandom.exportState();
+    assert.equal(await runtime.controller.executeWait(actor, [{ x: 1, y: 2 }, { x: 1, y: 1 }], Facing.WEST), true);
+    assert.deepEqual(steps, [{ position: "1,2", facing: Facing.EAST }, { position: "1,1", facing: Facing.NORTH }]);
+    assert.equal(actor.facing, Facing.WEST);
+    assert.deepEqual(runtime.battleRandom.exportState(), random);
+    assert.equal(runtime.controller.createSaveSnapshot().units.find(unit => unit.id === actor.id).facing, Facing.WEST);
+  } finally { await disposePendingBattle(runtime, completion); }
+});
+
+test("escape during committed movement retains the direction of arrival rather than the old or planned wait facing", async () => {
+  const stage = createServiceStage({ id: "escape_facing", map: Array.from({ length: 3 }, () => Array(4).fill("plain")),
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 2 }, facing: Facing.SOUTH },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 3, y: 0 } }],
+    objectives: [{ id: "escape", type: ObjectiveType.REACH, outcome: ObjectiveOutcome.VICTORY,
+      unitIds: ["actor"], destination: { x: 1, y: 1 }, radius: 0 }] });
+  const runtime = createControllerRuntime(stage), actor = stage.getUnit("actor");
+  const { completion } = await startNewBattle(runtime);
+  try {
+    assert.equal(await runtime.controller.executeWait(actor, [{ x: 1, y: 2 }, { x: 1, y: 1 }], Facing.WEST), true);
+    assert.equal((await completion).objectiveId, "escape");
+    assert.equal(actor.facing, Facing.NORTH);
+    assert.equal(stage.map.getPosition(actor).toKey(), "1,1");
+    assert.deepEqual(runtime.controller.getDiagnostics(), []);
+  } finally { runtime.controller.dispose(); }
+});
+
+test("escape movement queries and rejected commands preserve Domain, random, logs and checkpoints", async () => {
+  const stage = createServiceStage({ id: "escape_command", map: Array.from({ length: 3 }, () => Array(4).fill("plain")),
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 2 } },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 3, y: 0 } }],
+    objectives: [{ id: "escape", type: ObjectiveType.REACH, outcome: ObjectiveOutcome.VICTORY,
+      unitIds: ["actor"], destination: { x: 1, y: 1 } }] });
+  const runtime = createControllerRuntime(stage), { controller, battleRandom, checkpointPort, presentationPort } = runtime;
+  const actor = stage.getUnit("actor"), path = [{ x: 1, y: 2 }, { x: 1, y: 1 }];
+  const { completion } = await startNewBattle(runtime);
+  try {
+    const before = createStageDigest(stage), random = battleRandom.exportState();
+    const snapshots = checkpointPort.snapshots.length, presentations = presentationPort.requests.length;
+    const logs = stage.battleLog.getEntries();
+    assert.equal(controller.canExecuteImmediateMove(actor, path), true);
+    for (const [unit, invalidPath] of [[actor, []], [actor, null], [actor, [null]], [null, path],
+      [stage.getUnit("enemy"), path], [actor, [{ x: 1, y: 1 }]],
+      [actor, [{ x: 0, y: 1 }]], [actor, [...path, { x: 2, y: 1 }]]]) {
+      assert.equal(controller.canExecuteImmediateMove(unit, invalidPath), false);
+      assert.equal(await controller.executeImmediateMove(unit, invalidPath), false);
+    }
+    assert.equal(createStageDigest(stage), before);
+    assert.deepEqual(battleRandom.exportState(), random);
+    assert.deepEqual(stage.battleLog.getEntries(), logs);
+    assert.equal(checkpointPort.snapshots.length, snapshots);
+    assert.equal(presentationPort.requests.length, presentations);
+    const accepted = controller.executeImmediateMove(actor, path);
+    assert.equal(controller.canExecuteImmediateMove(actor, path), false);
+    assert.equal(await controller.executeImmediateMove(actor, path), false, "in-flight input must be rejected");
+    assert.equal(await accepted, true);
+    assert.equal((await completion).objectiveId, "escape");
+    assert.equal(await controller.executeImmediateMove(actor, path), false, "finished battle must reject input");
+    assert.equal(stage.map.getPosition(actor).toKey(), "1,1");
+    assert.equal(actor.facing, Facing.NORTH);
+    assert.deepEqual(battleRandom.exportState(), random);
+    assert.equal(checkpointPort.clearCount, 1);
+    assert.equal(presentationPort.requests.filter(request => request.type === PresentationRequestType.BATTLE_RESULT).length, 1);
+    assert.equal(presentationPort.requests.some(request => request.type === PresentationRequestType.ACTION), false);
+  } finally { controller.dispose(); await completion.catch(() => {}); }
+});
+
+test("trap reactions follow damage and status, including defeat and spell neutralization", async () => {
+  const cases = [
+    ["normal", 125, [], "actor", "罠", "しまった、罠だ！　隊列が乱れた。ここで立て直すぞ！"],
+    ["normal", 10, [], "actor", "罠", "ぐっ……足元に罠が……！"],
+    ["spell", 125, [], "actor", "妖術罠", "何だ、この妖気は……！　敵と味方の姿が歪んで見える！"],
+    ["spell", 5, [], "actor", "妖術罠", "ぐっ……地面から妖気が……ここにも術が仕込まれていたか……！"],
+    ["spell", 125, [UnitAbility.ILLUSION], "actor", "妖術罠無効", "術の流れは見切った。この幻術罠は私には通じぬ――破！"],
+    ["spell", 125, [UnitAbility.ILLUSION], "公孫勝", "妖術罠無効", "妖符の理は見切りました。この程度の幻術罠ならば――破！"]
+  ];
+  for (const [kind, troops, abilities, name, label, text] of cases) {
+    const stage = createServiceStage({ id: "trap_reactions", map: [["plain", "plain", "plain"]],
+      units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 0 }, troops, abilities, character: { name } },
+        { id: "enemy", army: Affiliation.ENEMY, position: { x: 2, y: 0 } }],
+      objectives: [{ id: "leader_lost", type: ObjectiveType.UNIT_DEFEAT, outcome: ObjectiveOutcome.DEFEAT, unitIds: ["actor"] }],
+      hiddenTrapDefinitions: [{ id: "trap", kind, position: { x: 1, y: 0 }, triggerAffiliations: [Affiliation.PLAYER] }] });
+    const runtime = createControllerRuntime(stage), { controller, presentationPort } = runtime;
+    const { completion } = await startNewBattle(runtime);
+    try {
+      const start = presentationPort.requests.length, actor = stage.getUnit("actor");
+      assert.equal(await controller.executeImmediateMove(actor, [{ x: 1, y: 0 }]), true);
+      const requests = presentationPort.requests.slice(start), dialogue = requests.find(request => request.type === "DIALOGUE");
+      assert.equal(dialogue.dialogue.speeches[0].speaker, actor.character);
+      assert.equal(dialogue.dialogue.speeches[0].actionLabel, label);
+      assert.equal(dialogue.dialogue.speeches[0].text, text);
+      const neutralized = abilities.length > 0, defeated = !actor.hasTroops();
+      assert.deepEqual(requests.map(request => request.type), ["MOVE", "TRAP",
+        ...(!neutralized ? ["DAMAGE"] : []), ...(!neutralized && !defeated ? ["STATUS"] : []),
+        "DIALOGUE", ...(defeated ? ["BATTLE_RESULT"] : [])]);
+      if (defeated) assert.equal((await completion).objectiveId, "leader_lost");
+      else assert.equal(controller.isStableForSave(), true);
+      assert.deepEqual(controller.getDiagnostics(), []);
+    } finally { controller.dispose(); await completion.catch(() => {}); }
+  }
+});
+
+test("immediate trap movement queries are pure and reject a trap consumed before the command", async () => {
+  const stage = createServiceStage({ id: "trap_query", map: [["plain", "plain", "plain", "plain"]],
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 0 } },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 3, y: 0 } }],
+    hiddenTrapDefinitions: [{ id: "trap", kind: HiddenTrapKind.NORMAL, position: { x: 1, y: 0 },
+      triggerAffiliations: [Affiliation.PLAYER] }] });
+  const runtime = createControllerRuntime(stage), { controller, battleRandom, checkpointPort, presentationPort } = runtime;
+  const { completion } = await startNewBattle(runtime);
+  try {
+    const actor = stage.getUnit("actor"), path = [{ x: 1, y: 0 }, { x: 2, y: 0 }];
+    const before = controller.createSaveSnapshot(), random = battleRandom.exportState();
+    const checkpoints = checkpointPort.snapshots.length, presentations = presentationPort.requests.length;
+    assert.equal(controller.canExecuteImmediateMove(actor, path), true);
+    for (const invalidPath of [[], null, [{ x: 2, y: 0 }], [...path, { x: 3, y: 0 }]]) {
+      assert.equal(controller.canExecuteImmediateMove(actor, invalidPath), false);
+      assert.equal(await controller.executeImmediateMove(actor, invalidPath), false);
+    }
+    assert.deepEqual(controller.createSaveSnapshot(), before);
+    assert.deepEqual(battleRandom.exportState(), random);
+    assert.equal(checkpointPort.snapshots.length, checkpoints);
+    assert.equal(presentationPort.requests.length, presentations);
+    stage.getHiddenTraps()[0].deactivate();
+    const consumed = controller.createSaveSnapshot();
+    assert.equal(await controller.executeImmediateMove(actor, path), false);
+    assert.deepEqual(controller.createSaveSnapshot(), consumed);
+    assert.equal(checkpointPort.snapshots.length, checkpoints);
+    assert.equal(presentationPort.requests.length, presentations);
+  } finally { await disposePendingBattle(runtime, completion); }
+});
+
+test("escape movement rechecks a changed objective gate before accepting the command", async () => {
+  const stage = createServiceStage({ id: "escape_gate", map: [["plain", "plain", "plain"]],
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 0 } },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 2, y: 0 } }],
+    events: [{ id: "close_exit", type: StageEventType.MISSION_TRANSITION, trigger: StageEventTrigger.AFTER_OPERATION }],
+    objectives: [{ id: "escape", type: ObjectiveType.REACH, outcome: ObjectiveOutcome.VICTORY,
+      unitIds: ["actor"], destination: { x: 1, y: 0 }, inactiveAfterEventId: "close_exit" }] });
+  const runtime = createControllerRuntime(stage), actor = stage.getUnit("actor"), path = [{ x: 1, y: 0 }];
+  const { completion } = await startNewBattle(runtime);
+  try {
+    assert.equal(runtime.controller.canExecuteImmediateMove(actor, path), true);
+    stage.eventManager.markCompleted(stage.eventManager.get("close_exit"));
+    const before = createStageDigest(stage), random = runtime.battleRandom.exportState();
+    assert.equal(await runtime.controller.executeImmediateMove(actor, path), false);
+    assert.equal(createStageDigest(stage), before);
+    assert.deepEqual(runtime.battleRandom.exportState(), random);
+  } finally { await disposePendingBattle(runtime, completion); }
+});
+
+test("an escape attempt stopped by a trap uses the actual stop and gives defeat priority", async () => {
+  for (const [troops, destinationX, expected] of [[125, 2, null], [125, 1, BattleOutcome.VICTORY], [10, 1, BattleOutcome.DEFEAT]]) {
+    const stage = createServiceStage({ id: `escape_trap_${troops}_${destinationX}`, map: [["plain", "plain", "plain", "plain"]],
+      units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 0 }, troops },
+        { id: "enemy", army: Affiliation.ENEMY, position: { x: 3, y: 0 } }],
+      objectives: [{ id: "escape", type: ObjectiveType.REACH, outcome: ObjectiveOutcome.VICTORY,
+        unitIds: ["actor"], destination: { x: destinationX, y: 0 } },
+        { id: "leader_lost", type: ObjectiveType.UNIT_DEFEAT, outcome: ObjectiveOutcome.DEFEAT, unitIds: ["actor"] }],
+      hiddenTrapDefinitions: [{ id: "trap", kind: HiddenTrapKind.NORMAL, position: { x: 1, y: 0 },
+        triggerAffiliations: [Affiliation.PLAYER] }] });
+    const runtime = createControllerRuntime(stage), actor = stage.getUnit("actor");
+    const { completion } = await startNewBattle(runtime);
+    try {
+      const path = runtime.controller.getCandidatePaths(actor, { x: destinationX, y: 0 })[0];
+      assert.equal(runtime.controller.canExecuteImmediateMove(actor, path), true);
+      assert.equal(await runtime.controller.executeImmediateMove(actor, path), true);
+      assert.equal(runtime.controller.getBattleResult()?.outcome ?? null, expected);
+      assert.equal(stage.map.getPosition(actor)?.toKey() ?? null, troops > 20 ? "1,0" : null);
+      assert.equal(actor.facing, Facing.EAST);
+      if (expected === null) {
+        assert.equal(actor.actionState, UnitActionState.FINISHED);
+        assert.equal(runtime.controller.isStableForSave(), true);
+        assert.equal(runtime.controller.createSaveSnapshot().units.find(unit => unit.id === actor.id).troops, 105);
+      } else {
+        assert.equal((await completion).objectiveId, expected === BattleOutcome.DEFEAT ? "leader_lost" : "escape");
+      }
+      assert.equal(stage.validateRuntime(), true);
+    } finally { runtime.controller.dispose(); await completion.catch(() => {}); }
+  }
+});
+
+test("crossing an escape zone without stopping there does not end the battle", async () => {
+  const stage = createServiceStage({ id: "escape_crossing", map: Array.from({ length: 3 }, () => Array(4).fill("plain")),
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 2 } },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 3, y: 0 } }],
+    objectives: [{ id: "escape", type: ObjectiveType.REACH, outcome: ObjectiveOutcome.VICTORY,
+      unitIds: ["actor"], destination: { x: 1, y: 1 } }] });
+  const runtime = createControllerRuntime(stage), actor = stage.getUnit("actor");
+  const { completion } = await startNewBattle(runtime);
+  try {
+    assert.equal(await runtime.controller.executeWait(actor, [{ x: 1, y: 2 }, { x: 1, y: 1 }, { x: 2, y: 1 }], Facing.SOUTH), true);
+    assert.equal(runtime.controller.getBattleResult(), null);
+    assert.equal(stage.map.getPosition(actor).toKey(), "2,1");
+    assert.equal(actor.actionState, UnitActionState.FINISHED);
+    assert.equal(runtime.controller.isStableForSave(), true);
+  } finally { runtime.controller.dispose(); await completion.catch(() => {}); }
+});
+
+test("entering an escape radius finishes the selected path before presenting victory", async () => {
+  const stage = createServiceStage({ id: "escape_radius", map: Array.from({ length: 2 }, () => Array(5).fill("plain")),
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 0 } },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 4, y: 1 } }],
+    objectives: [{ id: "escape", type: ObjectiveType.REACH, outcome: ObjectiveOutcome.VICTORY,
+      unitIds: ["actor"], destination: { x: 3, y: 0 }, radius: 1 }] });
+  const runtime = createControllerRuntime(stage), actor = stage.getUnit("actor");
+  const { completion } = await startNewBattle(runtime);
+  try {
+    assert.equal(await runtime.controller.executeWait(actor, [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }], Facing.SOUTH), true);
+    assert.equal((await completion).objectiveId, "escape");
+    assert.equal(stage.map.getPosition(actor).toKey(), "3,0");
+    assert.equal(actor.facing, Facing.EAST);
+    assert.equal(runtime.presentationPort.requests.filter(request => request.type === PresentationRequestType.MOVE).length, 3);
+  } finally { runtime.controller.dispose(); }
+});
+
+test("a trap that stops movement inside the escape zone still resolves victory there", async () => {
+  const stage = createServiceStage({ id: "escape_trap_stop", map: [["plain", "plain", "plain", "plain"]],
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 0 } },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 3, y: 0 } }],
+    objectives: [{ id: "escape", type: ObjectiveType.REACH, outcome: ObjectiveOutcome.VICTORY,
+      unitIds: ["actor"], destination: { x: 1, y: 0 } }],
+    hiddenTrapDefinitions: [{ id: "trap", kind: HiddenTrapKind.NORMAL, position: { x: 1, y: 0 },
+      triggerAffiliations: [Affiliation.PLAYER] }] });
+  const runtime = createControllerRuntime(stage), actor = stage.getUnit("actor");
+  const { completion } = await startNewBattle(runtime);
+  try {
+    assert.equal(await runtime.controller.executeWait(actor, [{ x: 1, y: 0 }, { x: 2, y: 0 }], Facing.WEST), true);
+    assert.equal((await completion).objectiveId, "escape");
+    assert.equal(stage.map.getPosition(actor).toKey(), "1,0");
+    assert.equal(actor.troops, actor.maxTroops - 20);
+    assert.equal(actor.facing, Facing.EAST);
+    assert.deepEqual(runtime.controller.getDiagnostics(), []);
+  } finally { runtime.controller.dispose(); }
+});
+
 test("movement and attack remove a defeated Unit before latching victory", async () => {
   const stage = createServiceStage({
     id: "controller_victory",
@@ -352,6 +598,7 @@ test("a Trap interrupts movement and cancels the planned action without another 
   ]), true);
 
   assert.deepEqual(stage.map.getPosition(actor), new Position(1, 0));
+  assert.equal(actor.facing, Facing.EAST, "a trap must preserve the direction of the interrupted step");
   assert.equal(actor.troops, actor.maxTroops - 20);
   assert.equal(actor.actionState, UnitActionState.FINISHED);
   assert.equal(target.troops, targetTroopsBefore);
@@ -492,6 +739,41 @@ test("phase-start ILLUSION uses the dedicated allied attack path", async () => {
   assert.equal(forcedAction.payload.targetId, "ally");
 
   await disposePendingBattle(runtime, completion);
+});
+
+test("friendly-fire casualties finish their action before phase-start or elemental checkpoints", async () => {
+  for (const type of ["ILLUSION", "FIRE", "WATER"]) {
+    const stage = createServiceStage({ id: `friendly_casualty_${type.toLowerCase()}`,
+      map: [Array(5).fill("plain")], units: [
+        { id: "actor", army: "PLAYER", position: { x: 0, y: 0 },
+          abilities: [UnitAbility.FIRE_TACTIC, UnitAbility.WATER_TACTIC], maxUses: { strategy: 3 },
+          statusEffects: type === "ILLUSION" ? [{ type: "ILLUSION", remainingTurns: 1 }] : [] },
+        { id: "ally", army: "PLAYER", position: { x: 1, y: 0 }, maxTroops: 1, troops: 1 },
+        { id: "target", army: "ENEMY", position: { x: 2, y: 0 }, maxTroops: 500, troops: 500 }
+      ] });
+    const runtime = createControllerRuntime(stage), { controller, checkpointPort } = runtime;
+    const { completion } = await startNewBattle(runtime);
+    try {
+      const actor = stage.getUnit("actor"), ally = stage.getUnit("ally");
+      if (type !== "ILLUSION") {
+        assert.equal(await controller.executeAction(createActionRequest(type, actor, stage.getUnit("target")), []), true);
+        assert.equal(actor.actionState, "TACTIC_COMMITTED");
+        assert.equal(await controller.finalizeTacticFacing(actor, "EAST"), true);
+      }
+      assert.equal(ally.troops, 0);
+      assert.equal(stage.map.getPosition(ally), null);
+      assert.equal(ally.actionState, "FINISHED", type);
+      assert.equal(controller.getBattleResult(), null);
+      assert.equal(controller.isStableForSave(), true);
+      assert.doesNotThrow(() => controller.createSaveSnapshot());
+      assert.ok(checkpointPort.snapshots.length > 0);
+      const savedAlly = checkpointPort.snapshots.at(-1).units.find(unit => unit.id === "ally");
+      assert.equal(savedAlly.troops, 0); assert.equal(savedAlly.position, null);
+      assert.equal(savedAlly.actionState, "FINISHED");
+      assert.equal(stage.battleLog.getEntries().filter(entry => entry.type === "DEFEATED").length, 1);
+      assert.deepEqual(controller.getDiagnostics(), []);
+    } finally { await disposePendingBattle(runtime, completion); }
+  }
 });
 
 test("dispose aborts an in-flight Presentation before the planned attack", async () => {
@@ -727,4 +1009,30 @@ test("an asynchronous checkpoint failure never blocks or faults Domain progress"
   assert.equal(checkpointPort.snapshots.length, 1);
 
   await disposePendingBattle(runtime, completion);
+});
+
+
+test("battle log records committed damage once, survives checkpoints and is unchanged by queries or resume", async () => {
+  const stage = createServiceStage({ id: "record_battle", map: [["plain", "plain", "plain"]],
+    units: [{ id: "actor", army: Affiliation.PLAYER, position: { x: 0, y: 0 } },
+      { id: "enemy", army: Affiliation.ENEMY, position: { x: 1, y: 0 }, maxTroops: 500, troops: 500 }] });
+  const runtime = createControllerRuntime(stage, { presentationPort: new FailingActionPresentationPort() });
+  const { completion } = await startNewBattle(runtime);
+  const actor = stage.getUnit("actor"), enemy = stage.getUnit("enemy");
+  const initial = stage.battleLog.getEntries();
+  assert.match(initial[0].text, /味方ターン 1/);
+  runtime.controller.getReachableCells(actor); runtime.controller.getAvailableActions(createActionQueryContext(actor, stage.map.getPosition(actor)));
+  assert.deepEqual(stage.battleLog.getEntries(), initial);
+  const beforeTroops = enemy.troops;
+  assert.equal(await runtime.controller.executeAction(createActionRequest(ActionType.NORMAL_ATTACK, actor, enemy), []), true);
+  const entries = stage.battleLog.getEntries();
+  const actions = entries.filter((entry) => entry.type === "ACTION");
+  assert.equal(actions.length, 1); assert.match(actions[0].text, new RegExp(`${beforeTroops - enemy.troops}ダメージ`));
+  assert.deepEqual(actions[0].unitIds, ["actor", "enemy"]);
+  assert.deepEqual(runtime.checkpointPort.snapshots.at(-1).logs, entries);
+  await disposePendingBattle(runtime, completion);
+  const resumed = createControllerRuntime(stage), resumedCompletion = resumed.controller.resumeLoadedBattle();
+  await waitUntil(() => resumed.controller.isStableForSave(), "LOG_RESUME");
+  assert.deepEqual(stage.battleLog.getEntries(), entries);
+  await disposePendingBattle(resumed, resumedCompletion);
 });

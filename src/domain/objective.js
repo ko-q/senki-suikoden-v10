@@ -27,6 +27,11 @@ export const UnitDefeatMatch = Object.freeze({
   ALL: "ALL"
 });
 
+export const TurnLimitCheckpoint = Object.freeze({
+  PLAYER_PHASE_END: "PLAYER_PHASE_END",
+  PLAYER_PHASE_START: "PLAYER_PHASE_START"
+});
+
 function normalizeUnits(units, codePrefix) {
   invariant(Array.isArray(units) && units.length > 0, `${codePrefix}_UNITS_REQUIRED`);
   invariant(units.every((unit) => unit instanceof Unit), `${codePrefix}_UNIT_INVALID`);
@@ -148,12 +153,23 @@ export class ReachObjective extends Objective {
   }
 
   evaluate(stage) {
+    return this.#evaluatePositions(stage);
+  }
+
+  // A read-only forecast of the endpoint; traps and events still resolve on commit.
+  wouldBeReachedAfterMove(stage, movingUnit, destination) {
+    return this.units.includes(movingUnit)
+      && this.#evaluatePositions(stage, movingUnit, Position.from(destination));
+  }
+
+  #evaluatePositions(stage, movingUnit = null, destination = null) {
     return this.units.every((unit) => {
-      if (!unit.hasTroops()) {
+      const currentPosition = stage.map.getPosition(unit);
+      if (!unit.hasTroops() || currentPosition === null) {
         return false;
       }
-      const position = stage.map.getPosition(unit);
-      return position !== null && position.manhattanDistanceTo(this.destination) <= this.radius;
+      const position = unit === movingUnit ? destination : currentPosition;
+      return position.manhattanDistanceTo(this.destination) <= this.radius;
     });
   }
 
@@ -182,6 +198,7 @@ export class UnitDefeatObjective extends Objective {
     outcome,
     units,
     match = UnitDefeatMatch.ANY,
+    requireDeployment = false,
     activeAfterEvent = null,
     inactiveAfterEvent = null
   }) {
@@ -194,14 +211,20 @@ export class UnitDefeatObjective extends Objective {
     });
     this.units = normalizeUnits(units, "UNIT_DEFEAT_OBJECTIVE");
     this.match = requireEnumValue(match, UnitDefeatMatch, "UNIT_DEFEAT_OBJECTIVE_MATCH_INVALID");
+    invariant(typeof requireDeployment === "boolean", "UNIT_DEFEAT_DEPLOYMENT_REQUIREMENT_INVALID");
+    invariant(!requireDeployment || outcome === ObjectiveOutcome.DEFEAT, "UNIT_DEFEAT_DEPLOYMENT_OUTCOME_INVALID");
+    this.requireDeployment = requireDeployment;
     Object.freeze(this);
   }
 
-  evaluate() {
+  evaluate(stage) {
+    // A required rescuer can fail to enter a crowded board. Evaluate only after its arrival event.
+    const defeated = (unit) => !unit.hasTroops()
+      || (this.requireDeployment && stage.map.getPosition(unit) === null);
     if (this.match === UnitDefeatMatch.ALL) {
-      return this.units.every((unit) => !unit.hasTroops());
+      return this.units.every(defeated);
     }
-    return this.units.some((unit) => !unit.hasTroops());
+    return this.units.some(defeated);
   }
 
   validateRuntime(stage) {
@@ -216,10 +239,10 @@ export class UnitDefeatObjective extends Objective {
 }
 
 /**
- * 最終Player Turn終了時だけ評価する敗北条件。
+ * 指定のPlayer phase境界で評価する敗北条件。既定は最終Turn終了時。
  */
 export class TurnLimitObjective extends Objective {
-  constructor({ id, maxTurn, activeAfterEvent = null, inactiveAfterEvent = null }) {
+  constructor({ id, maxTurn, checkpoint = TurnLimitCheckpoint.PLAYER_PHASE_END, activeAfterEvent = null, inactiveAfterEvent = null }) {
     super({
       id,
       type: ObjectiveType.TURN_LIMIT,
@@ -233,6 +256,7 @@ export class TurnLimitObjective extends Objective {
       Number.MAX_SAFE_INTEGER,
       "TURN_LIMIT_OBJECTIVE_TURN_INVALID"
     );
+    this.checkpoint = requireEnumValue(checkpoint, TurnLimitCheckpoint, "TURN_LIMIT_CHECKPOINT_INVALID");
     Object.freeze(this);
   }
 
@@ -303,7 +327,22 @@ export class ObjectiveManager {
   }
 
   evaluatePlayerPhaseEndDefeat(stage) {
-    return this.#evaluateFirst(stage, (objective) => objective instanceof TurnLimitObjective);
+    return this.#evaluateFirst(stage, (objective) => objective instanceof TurnLimitObjective
+      && objective.checkpoint === TurnLimitCheckpoint.PLAYER_PHASE_END);
+  }
+
+  findReachVictoryAfterMove(stage, unit, destination) {
+    return this.#objectives.find((objective) => (
+      objective instanceof ReachObjective
+      && objective.outcome === ObjectiveOutcome.VICTORY
+      && objective.isActive(stage.eventManager)
+      && objective.wouldBeReachedAfterMove(stage, unit, destination)
+    )) ?? null;
+  }
+
+  evaluatePlayerPhaseStartDefeat(stage) {
+    return this.#evaluateFirst(stage, (objective) => objective instanceof TurnLimitObjective
+      && objective.checkpoint === TurnLimitCheckpoint.PLAYER_PHASE_START);
   }
 
   evaluatePlayerPhaseStartVictory(stage) {

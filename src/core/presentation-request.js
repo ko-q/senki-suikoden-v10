@@ -4,10 +4,13 @@ import {
   requireNonEmptyString
 } from "./domain-error.js";
 import { Dialogue } from "../domain/dialogue.js";
+import { validatePresentationPayload } from "./presentation-payload.js";
 
 export const PresentationRequestType = Object.freeze({
   DIALOGUE: "DIALOGUE",
+  MISSION_BRIEFING: "MISSION_BRIEFING",
   NOTICE: "NOTICE",
+  UNIT_FOCUS: "UNIT_FOCUS",
   MOVE: "MOVE",
   ACTION: "ACTION",
   DAMAGE: "DAMAGE",
@@ -77,7 +80,7 @@ export function createSemanticPresentationRequest(type, payload = {}) {
   );
   return Object.freeze({
     type,
-    payload: normalizeParameters(payload)
+    payload: validatePresentationPayload(type, normalizeParameters(payload))
   });
 }
 
@@ -99,7 +102,7 @@ export function validatePresentationRequest(request) {
     normalizeParameters(request.parameters ?? {});
   }
   if (type !== PresentationRequestType.DIALOGUE && type !== PresentationRequestType.NOTICE) {
-    normalizeParameters(request.payload ?? {});
+    validatePresentationPayload(type, normalizeParameters(request.payload ?? {}));
   }
   return request;
 }

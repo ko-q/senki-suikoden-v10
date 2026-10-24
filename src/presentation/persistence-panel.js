@@ -50,17 +50,17 @@ function slotNumber(slotId) {
 }
 
 function formatSavedAt(savedAt) {
-  return new Date(savedAt).toISOString().replace("T", " ").replace(".000Z", " UTC");
+  return new Date(savedAt).toLocaleString("ja-JP");
 }
 
 function statusLabel(status) {
   const labels = {
-    occupied: "Ready",
-    temporary: "Recovered temporary",
-    backup: "Previous backup",
-    empty: "Empty",
-    corrupt: "Corrupt",
-    incompatible: "Incompatible"
+    occupied: "保存済み",
+    temporary: "一時保存から復旧可能",
+    backup: "バックアップ",
+    empty: "空き",
+    corrupt: "破損",
+    incompatible: "対応していないデータ"
   };
   return labels[status] ?? status;
 }
@@ -89,11 +89,14 @@ export class PersistencePanel {
   #hasSession;
   #canSave;
   #disposed;
+  #stageTitleForId;
 
-  constructor({ elements, confirmAction = defaultConfirm }) {
+  constructor({ elements, confirmAction = defaultConfirm, stageTitleForId = (id) => id }) {
     this.#elements = requireElements(elements);
     invariant(typeof confirmAction === "function", "PERSISTENCE_CONFIRM_REQUIRED");
     this.#confirmAction = confirmAction;
+    invariant(typeof stageTitleForId === "function", "PERSISTENCE_STAGE_TITLE_REQUIRED");
+    this.#stageTitleForId = stageTitleForId;
     this.#handlers = null;
     this.#staticBindings = [];
     this.#slotBindings = [];
@@ -145,7 +148,7 @@ export class PersistencePanel {
       }
       if (
         this.#hasSession
-        && !this.#confirmAction("Start a new battle? Current battle progress will be replaced.")
+        && !this.#confirmAction("ステージ選択に戻りますか？ 未保存の進行は新しい戦闘を開始すると失われます。")
       ) {
         return;
       }
@@ -211,13 +214,13 @@ export class PersistencePanel {
     );
     this.#recoveryInspection = inspection;
     const fallback = inspection.status === "temporary"
-      ? "\nA completed temporary copy will be used."
+      ? "\n正常な一時保存から復帰します。"
       : inspection.status === "backup"
-        ? "\nThe previous valid backup will be used."
+        ? "\n直前の正常なバックアップから復帰します。"
         : "";
     this.#elements.recoverySummary.textContent = [
-      inspection.summary.stageId,
-      `Turn ${inspection.summary.turn} · ${inspection.summary.phase}`,
+      this.#stageTitleForId(inspection.summary.stageId),
+      `${inspection.summary.turn}ターン目・${inspection.summary.phase === "PLAYER" ? "味方" : "敵"}ターン`,
       formatSavedAt(inspection.summary.savedAt)
     ].join("\n") + fallback;
     this.#elements.recoveryOverlay.hidden = false;
@@ -270,7 +273,7 @@ export class PersistencePanel {
     const heading = document.createElement("div");
     heading.className = "save-slot-heading";
     const title = document.createElement("strong");
-    title.textContent = `Slot ${slotNumber(inspection.slotId)}`;
+    title.textContent = `セーブ ${slotNumber(inspection.slotId)}`;
     const state = document.createElement("span");
     state.textContent = statusLabel(inspection.status);
     heading.append(title, state);
@@ -279,16 +282,16 @@ export class PersistencePanel {
     summary.className = "save-slot-summary";
     summary.textContent = inspection.summary === null
       ? this.#emptySummary(inspection.status)
-      : `${inspection.summary.stageId} · Turn ${inspection.summary.turn} · ${inspection.summary.phase}\n${formatSavedAt(inspection.summary.savedAt)}`;
+      : `${this.#stageTitleForId(inspection.summary.stageId)}・${inspection.summary.turn}ターン目・${inspection.summary.phase === "PLAYER" ? "味方" : "敵"}\n${formatSavedAt(inspection.summary.savedAt)}`;
 
     const actions = document.createElement("div");
     actions.className = "save-slot-actions";
-    const saveButton = createButton("Save", "primary-button");
-    const loadButton = createButton("Load", "secondary-button");
-    const deleteButton = createButton("Delete", "danger-button");
+    const saveButton = createButton("セーブ", "primary-button");
+    const loadButton = createButton("ロード", "secondary-button");
+    const deleteButton = createButton("削除", "danger-button");
     const repairButton = REPAIRABLE_STATUSES.has(inspection.status)
       && inspection.repairable === true
-      ? createButton("Repair", "repair-button")
+      ? createButton("修復", "repair-button")
       : null;
     saveButton.disabled = !this.#available
       || this.#busy
@@ -308,7 +311,7 @@ export class PersistencePanel {
     this.#listenSlot(saveButton, () => {
       if (
         inspection.status !== "empty"
-        && !this.#confirmAction(`Overwrite Slot ${slotNumber(inspection.slotId)}?`)
+        && !this.#confirmAction(`セーブ ${slotNumber(inspection.slotId)} を上書きしますか？`)
       ) {
         return;
       }
@@ -317,7 +320,7 @@ export class PersistencePanel {
     this.#listenSlot(loadButton, () => {
       if (
         !this.#confirmAction(
-          `Load Slot ${slotNumber(inspection.slotId)}? Current battle progress will be replaced.`
+          `セーブ ${slotNumber(inspection.slotId)} を読み込みますか？ 現在の未保存の進行は失われます。`
         )
       ) {
         return;
@@ -325,7 +328,7 @@ export class PersistencePanel {
       this.#invoke(() => this.#handlers.onLoad(inspection.slotId, inspection.guard));
     });
     this.#listenSlot(deleteButton, () => {
-      if (!this.#confirmAction(`Delete every copy in Slot ${slotNumber(inspection.slotId)}?`)) {
+      if (!this.#confirmAction(`セーブ ${slotNumber(inspection.slotId)} とそのバックアップを削除しますか？`)) {
         return;
       }
       this.#invoke(() => this.#handlers.onDelete(inspection.slotId, inspection.guard));
@@ -334,10 +337,10 @@ export class PersistencePanel {
     if (repairButton !== null) {
       this.#listenSlot(repairButton, () => {
         const source = inspection.status === "temporary"
-          ? "completed temporary copy"
-          : "previous valid backup";
+          ? "正常な一時保存"
+          : "直前のバックアップ";
         if (!this.#confirmAction(
-          `Repair Slot ${slotNumber(inspection.slotId)} from its ${source}?`
+          `セーブ ${slotNumber(inspection.slotId)} を${source}から修復しますか？`
         )) {
           return;
         }
@@ -354,12 +357,12 @@ export class PersistencePanel {
 
   #emptySummary(status) {
     if (status === "corrupt") {
-      return "No valid copy can be loaded. This slot may be replaced or deleted.";
+      return "正常なデータがありません。上書きまたは削除できます。";
     }
     if (status === "incompatible") {
-      return "This save belongs to an incompatible content revision.";
+      return "この版では読み込めないデータです。";
     }
-    return "No save data.";
+    return "セーブデータはありません。";
   }
 
   #listen(element, listener, type = "click") {

@@ -23,3 +23,5 @@ jobs:
         run: |
           node --check src/app/bootstrap.js
           node --check src/index.js
+      - name: Build and verify the player site
+        run: node scripts/build-site.mjs

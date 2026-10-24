@@ -26,9 +26,9 @@ test("GameResultPanel renders immutable result data and owns its restart handler
   });
 
   assert.equal(elements.overlay.hidden, false);
-  assert.equal(elements.title.textContent, "Victory");
-  assert.equal(elements.message.textContent, "stage.foundation_preview");
-  assert.match(elements.details.textContent, /Turn 4/);
+  assert.equal(elements.title.textContent, "勝利");
+  assert.equal(elements.message.textContent, "stage.foundation_previewを攻略しました。");
+  assert.match(elements.details.textContent, /4ターン目/);
   elements.newBattleButton.dispatch("click");
   assert.equal(restarts, 1);
   panel.hide();
@@ -36,4 +36,21 @@ test("GameResultPanel renders immutable result data and owns its restart handler
   panel.dispose();
   elements.newBattleButton.dispatch("click");
   assert.equal(restarts, 1);
+});
+
+
+test("defeat and final victory hide next-stage navigation, while a normal victory exposes it", () => {
+  const elements = createFakeGameResultElements(), panel = new GameResultPanel({ elements });
+  let advances = 0;
+  panel.bindHandlers({ onNewBattle() {}, onNextBattle() { advances++; } });
+  const result = { outcome: "DEFEAT", turn: 2, phase: "ENEMY" };
+  panel.show({ result, stageTitle: "第一章", hasNextStage: true });
+  assert.equal(elements.nextBattleButton.hidden, true);
+  elements.nextBattleButton.dispatch("click"); assert.equal(advances, 0);
+  panel.show({ result: { ...result, outcome: "VICTORY" }, stageTitle: "第一章", hasNextStage: true });
+  elements.nextBattleButton.dispatch("click"); assert.equal(advances, 1);
+  panel.hide(); elements.nextBattleButton.dispatch("click"); assert.equal(advances, 1);
+  panel.show({ result: { ...result, outcome: "VICTORY" }, stageTitle: "最終章", hasNextStage: false });
+  assert.equal(elements.nextBattleButton.hidden, true); panel.dispose();
+  assert.equal(elements.nextBattleButton.listeners.size, 0);
 });

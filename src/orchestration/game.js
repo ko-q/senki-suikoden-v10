@@ -28,10 +28,10 @@ function emptyInspection(slotId) {
 
 function errorMessage(error, fallback) {
   const messages = {
-    SAVE_CONFLICT: "Save data changed in another tab. Refresh the slots and try again.",
-    SAVE_LOAD_EMPTY: "This slot is empty.",
-    SAVE_LOAD_INCOMPATIBLE: "This save is not compatible with the current content revision.",
-    SAVE_LOAD_CORRUPT: "No valid copy could be loaded from this slot."
+    SAVE_CONFLICT: "別のタブでセーブが変更されました。一覧を更新して再度操作してください。",
+    SAVE_LOAD_EMPTY: "この枠にはセーブがありません。",
+    SAVE_LOAD_INCOMPATIBLE: "このセーブは現在の版に対応していません。",
+    SAVE_LOAD_CORRUPT: "この枠には読み込めるデータがありません。"
   };
   return messages[error?.code] ?? fallback;
 }
@@ -53,6 +53,9 @@ export class Game {
   #audioController;
   #started;
   #disposed;
+  #onRequestStageSelection;
+  #onSessionChange;
+  #completedSession = null;
 
   constructor({
     stageFactory,
@@ -63,7 +66,9 @@ export class Game {
     resultPanel,
     manualSlotIds = DEFAULT_MANUAL_SLOT_IDS,
     randomSeedFactory = () => BattleRandom.createSeed(),
-    audioController = null
+    audioController = null,
+    onRequestStageSelection = null,
+    onSessionChange = () => {}
   }) {
     invariant(stageFactory instanceof StageFactory, "GAME_STAGE_FACTORY_REQUIRED");
     requireIdentifier(stageId, "GAME_STAGE_ID_INVALID");
@@ -121,6 +126,10 @@ export class Game {
     });
     this.#started = false;
     this.#disposed = false;
+    invariant(onRequestStageSelection === null || typeof onRequestStageSelection === "function", "GAME_STAGE_SELECTION_CALLBACK_INVALID");
+    invariant(typeof onSessionChange === "function", "GAME_SESSION_CALLBACK_INVALID");
+    this.#onRequestStageSelection = onRequestStageSelection;
+    this.#onSessionChange = onSessionChange;
   }
 
   get currentSession() {
@@ -135,30 +144,32 @@ export class Game {
     return this.#audioController.isUnlocked;
   }
 
-  start() {
+  start({ autoStart = true } = {}) {
     invariant(!this.#started, "GAME_ALREADY_STARTED");
     invariant(!this.#disposed, "GAME_DISPOSED");
     this.#started = true;
     this.#persistencePanel.bindHandlers({
       onDelete: (slotId, guard) => this.deleteManual(slotId, guard),
       onLoad: (slotId, guard) => this.loadManual(slotId, guard),
-      onNewBattle: () => this.startNewBattle(),
+      onNewBattle: () => this.#requestNewBattle(),
       onRepair: (slotId, guard) => this.repairManual(slotId, guard),
       onRefresh: () => this.refreshManualSlots(true),
       onResumeRecovery: (guard) => this.resumeRecovery(guard),
       onSave: (slotId) => this.saveManual(slotId),
-      onStartNewFromRecovery: () => this.startNewBattle(),
+      onStartNewFromRecovery: () => this.#requestNewBattle(),
     });
     this.#resultPanel.bindHandlers({
-      onNewBattle: () => this.startNewBattle()
+      onNewBattle: () => this.#requestNewBattle(),
+      onNextBattle: () => this.startNextStage()
     });
     this.#persistencePanel.setPersistenceAvailable(this.#saveService !== null);
     this.refreshManualSlots(false);
 
     if (this.#saveService === null) {
+      if (!autoStart) return Object.freeze({ status: "awaiting_stage_selection" });
       this.startNewBattle({ announce: false });
       this.#persistencePanel.showStatus(
-        "Browser storage is unavailable. The battle can continue without saving.",
+        "ブラウザーの保存領域を利用できません。 保存せずに戦闘を続けられます。",
         "warning"
       );
       return Object.freeze({ status: "started_without_persistence" });
@@ -169,9 +180,10 @@ export class Game {
       recovery = this.#saveService.inspectSlot("recovery", SaveKind.RECOVERY);
     } catch (error) {
       this.#disablePersistence();
+      if (!autoStart) return Object.freeze({ status: "awaiting_stage_selection" });
       this.startNewBattle({ announce: false });
       this.#persistencePanel.showStatus(
-        "Browser storage became unavailable. The battle can continue without saving.",
+        "ブラウザーの保存領域が利用できなくなりました。 保存せずに戦闘を続けられます。",
         "warning"
       );
       return Object.freeze({ status: "started_without_persistence" });
@@ -179,50 +191,74 @@ export class Game {
     if (READABLE_SAVE_STATUSES.has(recovery.status)) {
       this.#persistencePanel.showRecoveryPrompt(recovery);
       this.#persistencePanel.showStatus(
-        "Recovery data was found. Choose Resume or Start new battle."
+        "前回の中断データがあります。続きから再開するか、ステージを選び直してください。"
       );
       return Object.freeze({ status: "awaiting_recovery_choice", recovery });
     }
 
+    if (!autoStart) return Object.freeze({ status: "awaiting_stage_selection", recovery });
     this.startNewBattle({ announce: false });
     if (recovery.status === "corrupt") {
       this.#persistencePanel.showStatus(
-        "Recovery data is corrupt. A new development battle was started.",
+        "中断データが破損しているため、新しく戦闘を開始しました。",
         "warning"
       );
     } else if (recovery.status === "incompatible") {
       this.#persistencePanel.showStatus(
-        "Recovery data is incompatible. A new development battle was started.",
+        "中断データがこの版に対応していないため、新しく戦闘を開始しました。",
         "warning"
       );
     } else {
-      this.#persistencePanel.showStatus("New development battle started.");
+      this.#persistencePanel.showStatus("戦闘を開始しました。");
     }
     return Object.freeze({ status: "started_new_battle", recovery });
   }
 
-  startNewBattle({ announce = true } = {}) {
+  #requestNewBattle() {
+    this.#resultPanel.hide();
+    this.#persistencePanel.hideRecoveryPrompt();
+    if (this.#onRequestStageSelection !== null) return this.#onRequestStageSelection();
+    return this.startNewBattle();
+  }
+
+  #nextStageId() {
+    const session = this.currentSession;
+    if (!session || this.#completedSession !== session || session.controller.getBattleResult()?.outcome !== "VICTORY") return null;
+    const ids = this.#stageFactory.getStageIds(), index = ids.indexOf(session.stage.id);
+    return index >= 0 ? ids[index + 1] ?? null : null;
+  }
+
+  startNextStage() {
+    this.#requireActiveGame();
+    const stageId = this.#nextStageId();
+    return stageId === null ? null : this.startNewBattle({ stageId });
+  }
+
+  startNewBattle({ announce = true, stageId = this.#stageId } = {}) {
     this.#requireActiveGame();
     this.#persistencePanel.setBusy(true);
     try {
-      const stage = this.#stageFactory.create(this.#stageId);
+      const stage = this.#stageFactory.create(stageId);
       const battleRandom = new BattleRandom(this.#randomSeedFactory());
       const candidate = this.#sessionFactory.create(stage, battleRandom, {
         checkpointPort: this.#checkpointPort
       });
       const replacement = this.#sessionHost.replaceWithNewBattle(candidate);
+      this.#completedSession = null;
+      this.#stageId = stageId;
       this.#audioController.startBattleThemeForChapter(replacement.session.stage.chapterNumber);
       this.#resultPanel.hide();
       this.#persistencePanel.hideRecoveryPrompt();
       this.#updateSessionState();
       this.#observeCompletion(replacement);
+      this.#onSessionChange(replacement.session);
       if (announce) {
-        this.#persistencePanel.showStatus("New development battle started.");
+        this.#persistencePanel.showStatus("戦闘を開始しました。");
       }
       return replacement;
     } catch (error) {
       this.#persistencePanel.showStatus(
-        errorMessage(error, "The new battle could not be started."),
+        errorMessage(error, "戦闘を開始できませんでした。"),
         "error"
       );
       return null;
@@ -232,20 +268,20 @@ export class Game {
   }
 
   resumeRecovery(guard) {
-    return this.#load("recovery", SaveKind.RECOVERY, guard, "Recovery battle loaded.");
+    return this.#load("recovery", SaveKind.RECOVERY, guard, "中断データから再開しました。");
   }
 
   saveManual(slotId) {
     this.#requireActiveGame();
     if (this.#saveService === null) {
-      this.#persistencePanel.showStatus("Browser storage is unavailable.", "error");
+      this.#persistencePanel.showStatus("ブラウザーの保存領域を利用できません。", "error");
       return null;
     }
     requireIdentifier(slotId, "GAME_MANUAL_SLOT_ID_INVALID");
     const session = this.#sessionHost.currentSession;
     if (session === null || !session.controller.isStableForSave()) {
       this.#persistencePanel.showStatus(
-        "Manual save is available only at a stable battle state.",
+        "行動処理が終わってからセーブしてください。",
         "warning"
       );
       this.#updateSessionState();
@@ -261,18 +297,18 @@ export class Game {
       if (!result.ok) {
         this.#persistencePanel.showStatus(
           result.status === "conflict"
-            ? "Save data changed in another tab. Refresh the slots and try again."
-            : "The manual save could not be written.",
+            ? "別のタブでセーブが変更されました。一覧を更新して再度操作してください。"
+            : "セーブできませんでした。",
           "error"
         );
         return result;
       }
       this.refreshManualSlots(false);
-      this.#persistencePanel.showStatus(`Saved ${slotId}.`);
+      this.#persistencePanel.showStatus(`セーブしました。`);
       return result;
     } catch (error) {
       this.#persistencePanel.showStatus(
-        errorMessage(error, "The manual save could not be written."),
+        errorMessage(error, "セーブできませんでした。"),
         "error"
       );
       return null;
@@ -281,13 +317,13 @@ export class Game {
 
   loadManual(slotId, guard) {
     requireIdentifier(slotId, "GAME_MANUAL_SLOT_ID_INVALID");
-    return this.#load(slotId, SaveKind.MANUAL, guard, `Loaded ${slotId}.`);
+    return this.#load(slotId, SaveKind.MANUAL, guard, `ロードしました。`);
   }
 
   deleteManual(slotId, guard) {
     this.#requireActiveGame();
     if (this.#saveService === null) {
-      this.#persistencePanel.showStatus("Browser storage is unavailable.", "error");
+      this.#persistencePanel.showStatus("ブラウザーの保存領域を利用できません。", "error");
       return null;
     }
     requireIdentifier(slotId, "GAME_MANUAL_SLOT_ID_INVALID");
@@ -295,27 +331,27 @@ export class Game {
     try {
       result = this.#saveService.deleteSlot({ slotId, guard });
     } catch (error) {
-      this.#persistencePanel.showStatus("The slot could not be deleted.", "error");
+      this.#persistencePanel.showStatus("セーブを削除できませんでした。", "error");
       return null;
     }
     if (!result.ok) {
       this.#persistencePanel.showStatus(
         result.status === "conflict"
-          ? "Save data changed in another tab. Refresh the slots and try again."
-          : "The slot could not be deleted.",
+          ? "別のタブでセーブが変更されました。一覧を更新して再度操作してください。"
+          : "セーブを削除できませんでした。",
         "error"
       );
       return result;
     }
     this.refreshManualSlots(false);
-    this.#persistencePanel.showStatus(`Deleted ${slotId}.`);
+    this.#persistencePanel.showStatus(`セーブを削除しました。`);
     return result;
   }
 
   repairManual(slotId, guard) {
     this.#requireActiveGame();
     if (this.#saveService === null) {
-      this.#persistencePanel.showStatus("Browser storage is unavailable.", "error");
+      this.#persistencePanel.showStatus("ブラウザーの保存領域を利用できません。", "error");
       return null;
     }
     requireIdentifier(slotId, "GAME_MANUAL_SLOT_ID_INVALID");
@@ -327,25 +363,25 @@ export class Game {
         guard
       });
     } catch (error) {
-      this.#persistencePanel.showStatus("The slot could not be repaired.", "error");
+      this.#persistencePanel.showStatus("セーブを修復できませんでした。", "error");
       return null;
     }
     if (!result.ok) {
       const messages = {
-        conflict: "Save data changed in another tab. Refresh the slots and try again.",
-        not_required: "The primary save is already valid.",
-        protected: "A newer incompatible save generation was preserved and cannot be repaired over.",
-        unavailable: "No valid fallback copy is available for repair."
+        conflict: "別のタブでセーブが変更されました。一覧を更新して再度操作してください。",
+        not_required: "セーブは正常です。",
+        protected: "対応していない新しい版のセーブを保護しました。上書き修復はできません。",
+        unavailable: "修復に使える正常なデータがありません。"
       };
       this.#persistencePanel.showStatus(
-        messages[result.status] ?? "The slot could not be repaired.",
+        messages[result.status] ?? "セーブを修復できませんでした。",
         result.status === "not_required" ? "info" : "error"
       );
       return result;
     }
     this.refreshManualSlots(false);
     const source = result.source === "temporary" ? "temporary copy" : "backup";
-    this.#persistencePanel.showStatus(`Repaired ${slotId} from its ${source}.`);
+    this.#persistencePanel.showStatus(`セーブを修復しました。`);
     return result;
   }
 
@@ -362,7 +398,7 @@ export class Game {
         this.#disablePersistence();
         if (announce) {
           this.#persistencePanel.showStatus(
-            "Browser storage became unavailable. The battle can continue without saving.",
+            "ブラウザーの保存領域が利用できなくなりました。 保存せずに戦闘を続けられます。",
             "warning"
           );
         }
@@ -371,7 +407,7 @@ export class Game {
     this.#persistencePanel.renderManualSlots(inspections);
     this.#updateSessionState();
     if (announce) {
-      this.#persistencePanel.showStatus("Save slots refreshed.");
+      this.#persistencePanel.showStatus("セーブ一覧を更新しました。");
     }
     return inspections;
   }
@@ -383,7 +419,7 @@ export class Game {
     const affected = this.#saveService.handleStorageEvent(event);
     if (affected) {
       this.#persistencePanel.showStatus(
-        "Save data changed in another tab. Refresh before saving, loading, repairing, or deleting.",
+        "別のタブでセーブが変更されました。一覧を更新してから操作してください。",
         "warning"
       );
     }
@@ -428,19 +464,21 @@ export class Game {
   #load(slotId, saveKind, guard, successMessage) {
     this.#requireActiveGame();
     if (this.#saveService === null) {
-      this.#persistencePanel.showStatus("Browser storage is unavailable.", "error");
+      this.#persistencePanel.showStatus("ブラウザーの保存領域を利用できません。", "error");
       return null;
     }
     this.#persistencePanel.setBusy(true);
     try {
       const prepared = this.#saveService.prepareLoad({ slotId, saveKind, guard });
       const replacement = this.#sessionHost.replaceWithPreparedLoad(prepared);
+      this.#stageId = replacement.session.stage.id;
       this.#audioController.startBattleThemeForChapter(replacement.session.stage.chapterNumber);
       this.#resultPanel.hide();
       this.#persistencePanel.hideRecoveryPrompt();
       this.#updateSessionState();
       this.#observeCompletion(replacement);
       this.#persistencePanel.showStatus(successMessage);
+      this.#onSessionChange(replacement.session);
       return replacement;
     } catch (error) {
       if (error?.code === "SAVE_CONFLICT" && saveKind === SaveKind.RECOVERY) {
@@ -448,20 +486,20 @@ export class Game {
         if (READABLE_SAVE_STATUSES.has(refreshed.status)) {
           this.#persistencePanel.showRecoveryPrompt(refreshed);
           this.#persistencePanel.showStatus(
-            "Recovery data changed in another tab. The summary was refreshed; review it and choose again.",
+            "別のタブで中断データが変更されました。更新した内容を確認して選び直してください。",
             "warning"
           );
           return null;
         }
         this.#persistencePanel.hideRecoveryPrompt();
         this.#persistencePanel.showStatus(
-          "Recovery data changed and is no longer loadable. Start a new battle.",
+          "中断データが変更され、読み込めなくなりました。ステージを選び直してください。",
           "warning"
         );
         return null;
       }
       this.#persistencePanel.showStatus(
-        errorMessage(error, "The save could not be loaded. The current battle is unchanged."),
+        errorMessage(error, "ロードできませんでした。現在の戦闘は保持されています。"),
         "error"
       );
       return null;
@@ -480,14 +518,14 @@ export class Game {
       completion.then((saveResult) => {
         if (!this.#disposed && saveResult?.ok === false) {
           this.#persistencePanel.showStatus(
-            "Recovery save could not be updated. The battle can continue.",
+            "中断データを保存できませんでした。戦闘は続けられます。",
             "warning"
           );
         }
       }).catch(() => {
         if (!this.#disposed) {
           this.#persistencePanel.showStatus(
-            "Recovery save could not be updated. The battle can continue.",
+            "中断データを保存できませんでした。戦闘は続けられます。",
             "warning"
           );
         }
@@ -505,14 +543,16 @@ export class Game {
         return;
       }
       this.#updateSessionState();
+      this.#completedSession = session;
       this.#resultPanel.show({
         result,
-        stageTitle: session.stage.titleKey
+        stageTitle: session.stage.titleKey,
+        hasNextStage: this.#nextStageId() !== null
       });
     }).catch((error) => {
       if (error?.name !== "AbortError" && !this.#disposed) {
         this.#persistencePanel.showStatus(
-          "The battle result could not be completed.",
+          "戦闘結果の処理を完了できませんでした。",
           "error"
         );
       }
@@ -521,6 +561,7 @@ export class Game {
 
   #updateSessionState() {
     const session = this.#sessionHost.currentSession;
+    if (this.#completedSession !== session) this.#completedSession = null;
     this.#persistencePanel.setSessionState({
       hasSession: session !== null,
       canSave: session !== null && session.controller.isStableForSave()

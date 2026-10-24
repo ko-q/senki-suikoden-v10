@@ -12,7 +12,7 @@ test("index.html references local assets that exist", async () => {
   const localReferences = [...html.matchAll(/(?:href|src)="(\.\/[^"?#]+)"/g)]
     .map((match) => match[1]);
 
-  assert.deepEqual(localReferences, ["./styles/main.css", "./src/app/bootstrap.js"]);
+  assert.deepEqual(localReferences, ["./styles/main.css", "./styles/player-interface.css", "./src/app/bootstrap.js"]);
   await Promise.all(localReferences.map((reference) => access(
     path.resolve(projectRoot, reference)
   )));

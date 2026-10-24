@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#191814">
-    <title>Senki Suikoden v10</title>
-    <link rel="stylesheet" href="./styles/main.css">
+    <title>戦旗水滸伝 v10</title>
+    <link rel="stylesheet" href="./styles/main.css"><link rel="stylesheet" href="./styles/player-interface.css">
   </head>
   <body>
     <section
@@ -49,180 +49,88 @@
     </section>
 
     <main class="app-shell">
-      <header class="hero">
-        <div class="hero-heading">
-          <div>
-            <p class="eyebrow">Separate v10 solution</p>
-            <h1>Senki Suikoden v10</h1>
-          </div>
-          <button
-            id="audioButton"
-            class="audio-button"
-            type="button"
-            aria-pressed="false"
-          >Sound: Start</button>
-        </div>
-        <p class="subtitle">OO battle, resilient saves, and v9 audiovisual effects</p>
-      </header>
-
-      <section class="persistence-card" aria-labelledby="persistenceTitle">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">Transactional persistence</p>
-            <h2 id="persistenceTitle">Save and load</h2>
-          </div>
-          <div class="persistence-toolbar">
-            <button id="newBattleButton" class="secondary-button" type="button">New battle</button>
-            <button id="refreshSlotsButton" class="secondary-button" type="button">Refresh</button>
-          </div>
-        </div>
-        <p id="persistenceStatus" class="persistence-status" data-tone="info" aria-live="polite">
-          Checking save data.
-        </p>
-        <p id="persistenceUnavailable" class="persistence-unavailable" hidden>
-          Browser storage is unavailable. Save and load controls are disabled.
-        </p>
-        <div
-          id="manualSlotList"
-          class="save-slot-list"
-          role="list"
-          aria-label="Twenty manual save slots"
-          aria-live="polite"
-        ></div>
-      </section>
-
-      <div id="battleHost" class="battle-host" aria-live="polite"></div>
-
+      <section id="battleHost" hidden></section>
       <template id="battleViewTemplate">
         <div class="battle-view" data-battle-view-root>
-          <section class="status-card" aria-live="polite">
-            <div>
-              <span class="status-label">Mode</span>
-              <strong id="modeValue">LOCKED</strong>
-            </div>
-            <div>
-              <span class="status-label">Domain</span>
-              <strong id="domainValue">Busy</strong>
-            </div>
-            <div>
-              <span class="status-label">Turn</span>
-              <strong id="turnValue">1</strong>
-            </div>
-            <div>
-              <span class="status-label">Phase</span>
-              <strong id="phaseValue">PLAYER</strong>
-            </div>
-            <div>
-              <span class="status-label">Build</span>
-              <strong id="versionValue">Loading</strong>
-            </div>
+          <section class="status-panel" aria-label="戦闘概要">
+            <span id="phaseValue">味方ターン</span><span id="turnValue">1</span>
+            <span class="unit-counts"><span id="playerCountText"></span><span id="enemyCountText"></span></span>
+            <span id="modeValue" hidden></span><span id="domainValue" hidden></span><span id="versionValue" hidden></span>
           </section>
-
-          <section class="preview-panel" aria-labelledby="previewTitle">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">Playable development fixture</p>
-                <h2 id="previewTitle">Battle vertical slice</h2>
+          <section class="preview-panel" aria-label="戦闘マップ領域">
+            <div id="battleToolbar" class="battle-toolbar">
+              <button id="stageInfoButton" class="stage-info-button" type="button">ステージ情報</button>
+              <button id="battleStatusButton" class="battle-status-button" type="button">戦況</button>
+              <button id="strategyGuideButton" class="strategy-guide-button" type="button">戦術指南</button>
+              <button id="endTurnButton" class="battle-end-button" type="button" disabled>ターン終了</button>
+            </div>
+            <div id="commandDock" class="command-dock" hidden>
+              <p id="terrainInfoText" class="terrain-info"></p>
+              <div id="selectedUnitInfo" class="selected-character">
+                <p id="selectedUnitText" class="unit-summary"></p>
+                <div id="selectedUnitPortrait" class="character-portrait selected-portrait" hidden></div>
               </div>
-              <button id="resetButton" class="secondary-button" type="button">Clear</button>
-            </div>
-            <p id="instructionText" class="instruction">
-              Loading the development battle.
-            </p>
-            <p id="selectedUnitText" class="unit-summary">No unit selected.</p>
-            <p id="eventText" class="event-text" data-tone="info">Battle setup.</p>
-            <div class="board-scroll">
-              <div class="battle-board-shell">
-                <div id="board" class="board" role="grid" aria-label="Development battle map"></div>
-                <div id="effectLayer" class="battle-effect-layer" aria-hidden="true"></div>
+              <div id="actionPanel" class="command-toolbar" aria-label="部隊の行動" hidden>
+                <button id="bowButton" type="button" disabled>遠距離不可</button>
+                <button id="chargeButton" type="button" disabled>突撃</button>
+                <button id="tacticButton" type="button" disabled>撹乱</button>
+                <button id="waitButton" class="wait-button" type="button" disabled>待機</button>
               </div>
-            </div>
-            <div id="actionPanel" class="command-toolbar" aria-label="Battle commands" hidden>
-              <button id="bowButton" class="primary-button" type="button" disabled>Projectile</button>
-              <button id="chargeButton" class="primary-button" type="button" disabled>Charge</button>
-              <button id="tacticButton" class="primary-button" type="button" disabled>Tactic</button>
-              <button id="waitButton" class="primary-button" type="button" disabled>Wait</button>
-              <button id="pathButton" class="secondary-button" type="button" disabled>Path 0/0</button>
-            </div>
-            <p id="pathSummary" class="path-summary">No movement path</p>
-            <div id="tacticPanel" class="tactic-panel" aria-hidden="true" hidden>
-              <span>Choose tactic</span>
-              <div class="tactic-buttons">
-                <button id="confusionLv1Button" class="secondary-button" type="button">Confusion Lv1</button>
-                <button id="confusionLv2Button" class="secondary-button" type="button">Confusion Lv2</button>
-                <button id="confusionLv3Button" class="secondary-button" type="button">Confusion Lv3</button>
-                <button id="illusionButton" class="secondary-button" type="button">Illusion</button>
-                <button id="wideIllusionButton" class="secondary-button" type="button">Wide illusion</button>
-                <button id="fireButton" class="secondary-button" type="button">Fire</button>
-                <button id="waterButton" class="secondary-button" type="button">Water</button>
+              <div id="tacticPanel" class="tactic-panel" aria-label="計略選択" hidden>
+                <div class="tactic-buttons">
+                  <button id="confusionLv1Button" type="button">撹乱Lv1</button><button id="confusionLv2Button" type="button">撹乱Lv2</button><button id="confusionLv3Button" type="button">撹乱Lv3</button>
+                  <button id="illusionButton" type="button">幻術</button><button id="wideIllusionButton" type="button">広域幻術</button><button id="fireButton" type="button">火計</button><button id="waterButton" type="button">水計</button>
+                </div>
               </div>
-            </div>
-            <div class="turn-toolbar">
-              <button id="endTurnButton" class="secondary-button" type="button" disabled>End turn</button>
-            </div>
-            <div id="facingPanel" class="facing-panel" hidden>
-              <span>Final facing</span>
-              <div class="facing-buttons">
-                <button id="facingNorthButton" class="secondary-button" type="button">North</button>
-                <button id="facingEastButton" class="secondary-button" type="button">East</button>
-                <button id="facingSouthButton" class="secondary-button" type="button">South</button>
-                <button id="facingWestButton" class="secondary-button" type="button">West</button>
+              <div id="facingPanel" class="facing-panel" hidden>
+                <div class="facing-buttons">
+                  <button id="facingNorthButton" type="button">北</button><button id="facingEastButton" type="button">東</button><button id="facingSouthButton" type="button">南</button><button id="facingWestButton" type="button">西</button>
+                </div>
               </div>
+              <div class="command-footer"><button id="resetButton" type="button">戻る</button><p id="instructionText" class="instruction"></p><button id="pathButton" type="button" hidden>経路</button></div>
+              <p id="pathSummary" hidden></p>
             </div>
+            <div id="boardScroll" class="board-scroll">
+              <div id="boardTopSpacer" class="board-scroll-spacer" aria-hidden="true"></div>
+              <div class="battle-board-shell"><div id="board" class="board" role="grid" aria-label="戦闘マップ"></div><div id="effectLayer" class="battle-effect-layer" aria-hidden="true"></div></div>
+            </div>
+            <p id="eventText" class="event-text" aria-live="polite" hidden></p>
           </section>
-
           <section id="dialogueOverlay" class="dialogue-overlay" aria-live="polite" hidden>
-            <div class="dialogue-card">
-              <p id="dialogueSpeaker" class="dialogue-speaker"></p>
-              <p id="dialogueText" class="dialogue-text"></p>
-              <button id="dialogueNextButton" class="primary-button" type="button">Next</button>
-            </div>
+            <div class="dialogue-card"><div id="dialoguePortrait" class="character-portrait dialogue-portrait" hidden></div><p class="dialogue-heading"><span id="dialogueSpeaker" class="dialogue-speaker"></span><span id="dialogueAction" class="dialogue-action" hidden></span></p><p id="dialogueText" class="dialogue-text"></p><button id="dialogueNextButton" class="primary-button" type="button">進む</button></div>
           </section>
-          <section
-            id="resultEffectLayer"
-            class="battle-result-effect-host"
-            aria-hidden="true"
-            hidden
-          ></section>
+          <section id="unitDetailOverlay" class="unit-detail-overlay" role="dialog" aria-modal="true" aria-label="部隊の能力詳細" tabindex="-1" hidden></section>
+          <section id="missionOverlay" class="player-overlay" hidden><div class="player-card mission-card"><h2>作戦条件</h2><h3>勝利条件</h3><p id="missionVictory"></p><h3>敗北条件</h3><p id="missionDefeat"></p><button id="missionStartButton" class="main-button" type="button">戦闘開始</button></div></section>
+          <section id="resultEffectLayer" class="battle-result-effect-host" aria-hidden="true" hidden></section>
         </div>
       </template>
-
-      <section class="scope-card">
-        <h2>Milestone 13 scope</h2>
-        <p>
-          This page provides twenty manual save slots, explicit fallback repair, recovery
-          choice, transactional BattleSession replacement, v9-compatible battle audio,
-          Battle-owned visual effects, and v9-compatible title and result sequences.
-          It remains a development fixture and contains no canonical character data.
-        </p>
-      </section>
     </main>
-
-    <section id="resultOverlay" class="game-result-overlay" aria-hidden="true" hidden>
-      <div class="game-result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
-        <p class="eyebrow">Battle result</p>
-        <h2 id="resultTitle">Result</h2>
-        <p id="resultMessage" class="game-result-message"></p>
-        <p id="resultDetails" class="game-result-details"></p>
-        <button id="resultNewBattleButton" class="primary-button" type="button">
-          New development battle
-        </button>
+    <section id="stageSelectOverlay" class="player-overlay" aria-hidden="true" hidden>
+      <div class="player-card" role="dialog" aria-modal="true" aria-labelledby="stageSelectTitle">
+        <h2 id="stageSelectTitle">ステージ選択</h2>
+        <p class="stage-intro"><strong>戦旗水滸伝</strong>――百八星の英傑たちを率いる、スマートフォン縦画面向けの戦術物語。全9ステージから戦う章を選択してください。</p>
+        <button id="stageSelectLoadButton" class="stage-load-button" type="button">ロード選択</button>
+        <div id="stageList" class="stage-list"></div>
       </div>
     </section>
-
-    <section id="recoveryOverlay" class="recovery-overlay" aria-hidden="true" hidden>
-      <div class="recovery-card" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
-        <p class="eyebrow">Interrupted battle found</p>
-        <h2 id="recoveryTitle">Resume the recovery save?</h2>
-        <p id="recoverySummary" class="recovery-summary"></p>
-        <div class="recovery-actions">
-          <button id="resumeRecoveryButton" class="primary-button" type="button">Resume</button>
-          <button id="startNewFromRecoveryButton" class="secondary-button" type="button">Start new battle</button>
-        </div>
+    <section id="saveSlotOverlay" class="player-overlay save-overlay" hidden>
+      <div class="player-card persistence-card" role="dialog" aria-modal="true" aria-labelledby="persistenceTitle">
+        <h2 id="persistenceTitle">ロード選択</h2><p id="persistenceStatus" class="persistence-status" aria-live="polite"></p>
+        <p id="persistenceUnavailable" hidden>このブラウザーでは保存機能を利用できません。</p>
+        <div id="manualSlotList" class="save-slot-list" role="list" aria-label="セーブ枠20件"></div>
+        <div class="persistence-toolbar"><button id="closeSaveSlotsButton" type="button">戻る</button><button id="refreshSlotsButton" type="button">一覧更新</button><button id="newBattleButton" type="button">ステージ選択</button></div>
       </div>
     </section>
-
-    <noscript>This preview requires JavaScript modules.</noscript>
+    <section id="battleInfoOverlay" class="player-overlay info-overlay" hidden>
+      <div class="player-card" role="dialog" aria-modal="true" aria-labelledby="battleInfoTitle">
+        <h2 id="battleInfoTitle"></h2><div id="battleInfoBody" class="battle-info-body"></div>
+        <div id="stageInfoActions" class="stage-info-actions"><button id="audioButton" type="button" aria-pressed="false">音声：開始</button><button id="openSaveButton" type="button">セーブ選択</button><button id="openLoadButton" type="button">ロード選択</button><button id="returnStageSelectButton" type="button">ステージ選択</button></div>
+        <button id="closeBattleInfoButton" type="button">閉じる</button>
+      </div>
+    </section>
+    <section id="resultOverlay" class="game-result-overlay" aria-hidden="true" hidden><div class="game-result-card player-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><h2 id="resultTitle">戦闘結果</h2><p id="resultMessage"></p><p id="resultDetails"></p><button id="resultNextBattleButton" type="button" hidden>次のステージ</button><button id="resultNewBattleButton" type="button">ステージ選択</button></div></section>
+    <section id="recoveryOverlay" class="recovery-overlay" aria-hidden="true" hidden><div class="recovery-card player-card" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle"><h2 id="recoveryTitle">戦いの続きから</h2><p id="recoverySummary"></p><div class="recovery-actions"><button id="resumeRecoveryButton" type="button">続きから再開</button><button id="startNewFromRecoveryButton" type="button">ステージを選び直す</button></div></div></section>
+    <noscript>このゲームを遊ぶにはJavaScriptを有効にしてください。</noscript>
     <script type="module" src="./src/app/bootstrap.js"></script>
   </body>
 </html>

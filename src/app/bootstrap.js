@@ -3,10 +3,9 @@ import {
   AudioThemeId,
   BattleSessionFactory,
   BattleViewFactory,
-  CharacterManager,
-  DEVELOPMENT_STAGE_DEFINITION,
   Game,
   GameResultPanel,
+  GAME_VERSION,
   PersistencePanel,
   SaveRepository,
   SaveService,
@@ -14,7 +13,12 @@ import {
   TitleScreen,
   createV9CompatibleTerrainCatalog
 } from "../index.js";
+import { createV9CharacterManager } from "../definitions/v9-characters.js";
+import { V9_OPENING_STAGE_SOURCE } from "../definitions/v9-opening-stage-source.js";
+import { createV9OpeningStageDefinition } from "../definitions/v9-opening-stages.js";
+import { PlayerShell } from "../presentation/player-shell.js";
 
+document.title = `戦旗水滸伝 v${GAME_VERSION}`;
 const audioButton = document.querySelector("#audioButton");
 
 const persistenceElements = {
@@ -33,6 +37,7 @@ const resultElements = {
   details: document.querySelector("#resultDetails"),
   message: document.querySelector("#resultMessage"),
   newBattleButton: document.querySelector("#resultNewBattleButton"),
+  nextBattleButton: document.querySelector("#resultNextBattleButton"),
   overlay: document.querySelector("#resultOverlay"),
   title: document.querySelector("#resultTitle")
 };
@@ -44,9 +49,10 @@ const titleElements = {
   root: document.querySelector("#titleScreen")
 };
 
+const characterManager = createV9CharacterManager();
 const stageFactory = new StageFactory({
-  definitions: [DEVELOPMENT_STAGE_DEFINITION],
-  characterManager: new CharacterManager([]),
+  definitions: V9_OPENING_STAGE_SOURCE.map((source) => createV9OpeningStageDefinition(source.id, characterManager)),
+  characterManager,
   terrainCatalog: createV9CompatibleTerrainCatalog()
 });
 const viewFactory = new BattleViewFactory({
@@ -55,7 +61,8 @@ const viewFactory = new BattleViewFactory({
 });
 const audioController = new AudioController();
 const sessionFactory = new BattleSessionFactory({ viewFactory, audioController });
-const persistencePanel = new PersistencePanel({ elements: persistenceElements });
+const persistencePanel = new PersistencePanel({ elements: persistenceElements,
+  stageTitleForId: (id) => V9_OPENING_STAGE_SOURCE.find((stage) => stage.id === id)?.title ?? id });
 const resultPanel = new GameResultPanel({ elements: resultElements });
 
 let saveService = null;
@@ -70,15 +77,20 @@ try {
   saveService = null;
 }
 
+let playerShell;
 const game = new Game({
   stageFactory,
-  stageId: DEVELOPMENT_STAGE_DEFINITION.id,
+  stageId: V9_OPENING_STAGE_SOURCE[0].id,
   sessionFactory,
   saveService,
   persistencePanel,
   resultPanel,
-  audioController
+  audioController,
+  onRequestStageSelection: () => playerShell.showStageSelection(),
+  onSessionChange: (session) => playerShell.attachSession(session)
 });
+playerShell = new PlayerShell({ game, stages: V9_OPENING_STAGE_SOURCE,
+  elements: Object.fromEntries(["battleHost", "stageSelectOverlay", "stageList", "stageSelectLoadButton", "closeSaveSlotsButton", "saveSlotOverlay", "closeBattleInfoButton", "battleInfoOverlay", "openSaveButton", "openLoadButton", "returnStageSelectButton", "battleInfoTitle", "battleInfoBody", "stageInfoActions", "persistenceTitle"].map((id) => [id, document.querySelector(`#${id}`)])) });
 const titleScreen = new TitleScreen({
   elements: titleElements,
   onPrepare: async () => {
@@ -89,17 +101,17 @@ const titleScreen = new TitleScreen({
   onThunder: () => audioController.playTitleThunder(),
   onWhiteout: () => audioController.playTitleWhiteoutHiss(),
   onTitleTheme: () => audioController.startTheme(AudioThemeId.TITLE),
-  onStart: () => game.start()
+  onStart: () => { playerShell.showStageSelection(); game.start({ autoStart: false }); }
 });
 titleScreen.start();
 
 function renderAudioButton() {
   if (!game.isAudioUnlocked) {
-    audioButton.textContent = "Sound: Start";
+    audioButton.textContent = "音声：開始";
     audioButton.setAttribute("aria-pressed", "false");
     return;
   }
-  audioButton.textContent = game.isAudioEnabled ? "Sound: ON" : "Sound: OFF";
+  audioButton.textContent = game.isAudioEnabled ? "音声：入" : "音声：切";
   audioButton.setAttribute("aria-pressed", game.isAudioEnabled ? "true" : "false");
 }
 
@@ -107,7 +119,7 @@ audioButton.addEventListener("click", async () => {
   if (!game.isAudioUnlocked) {
     const unlocked = await game.unlockAudio();
     if (!unlocked) {
-      audioButton.textContent = "Sound unavailable";
+      audioButton.textContent = "音声を開始できません";
       audioButton.disabled = true;
       return;
     }
@@ -130,6 +142,7 @@ if (typeof globalThis.addEventListener === "function") {
   });
   globalThis.addEventListener("pagehide", () => {
     titleScreen.dispose();
+    playerShell.dispose();
     game.dispose();
   }, { once: true });
 }

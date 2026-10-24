@@ -186,6 +186,7 @@ test("two-turn confusion shows the alert symbol and repeats the unit flash", asy
       PresentationRequestType.STATUS,
       {
         reason: ActionType.CONFUSION_LV1,
+        actorId: "actor",
         entries: [{
           unitId: "target",
           position: { x: 2, y: 1 },
@@ -222,6 +223,7 @@ test("normal illusion adds its skull while wide illusion keeps the overlay-only 
       PresentationRequestType.STATUS,
       {
         reason: ActionType.ILLUSION,
+        actorId: "actor",
         entries: [{
           unitId: "target",
           position: { x: 2, y: 1 },

@@ -1,0 +1,216 @@
+- main:
+  - paragraph: Separate v10 solution
+  - heading "Senki Suikoden v10" [level=1]
+  - 'button "Sound: ON" [pressed]'
+  - paragraph: OO battle, resilient saves, and v9 audiovisual effects
+  - region "Save and load":
+    - paragraph: Transactional persistence
+    - heading "Save and load" [level=2]
+    - button "New battle"
+    - button "Refresh"
+    - paragraph: New development battle started.
+    - list "Twenty manual save slots":
+      - strong: Slot 1
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 2
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 3
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 4
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 5
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 6
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 7
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 8
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 9
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 10
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 11
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 12
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 13
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 14
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 15
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 16
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 17
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 18
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 19
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+      - strong: Slot 20
+      - generic: Empty
+      - paragraph: No save data.
+      - button "Save"
+      - button "Load" [disabled]
+      - button "Delete" [disabled]
+  - generic: Mode
+  - strong: UNIT_SELECTED
+  - generic: Domain
+  - strong: Stable
+  - generic: Turn
+  - strong: "1"
+  - generic: Phase
+  - strong: PLAYER
+  - generic: Build
+  - strong: 10.0.0-dev.13
+  - region "Battle vertical slice":
+    - paragraph: Playable development fixture
+    - heading "Battle vertical slice" [level=2]
+    - button "Clear"
+    - paragraph: Select a marked cell, tap an adjacent enemy, or choose an action.
+    - paragraph: Development Player · 125/125 · READY
+    - paragraph: "Turn 1: PLAYER."
+    - grid "Development battle map":
+      - gridcell "terrain.plain 0,0":
+        - generic: "2"
+      - gridcell "terrain.plain 1,0":
+        - generic: "3"
+      - gridcell "terrain.forest 2,0":
+        - generic: "5"
+      - gridcell "terrain.plain 3,0":
+        - generic: "5"
+      - gridcell "terrain.plain 4,0"
+      - gridcell "terrain.hill 5,0"
+      - gridcell "terrain.plain 6,0"
+      - gridcell "terrain.plain 0,1":
+        - generic: "1"
+      - gridcell "terrain.wall 1,1"
+      - gridcell "terrain.wall 2,1"
+      - gridcell "terrain.road 3,1":
+        - generic: "4"
+      - gridcell "terrain.wall 4,1"
+      - gridcell "terrain.wall 5,1"
+      - gridcell "terrain.plain 6,1"
+      - gridcell "terrain.plain 0,2 PLAYER Development Player 125":
+        - strong: P
+        - generic: "125"
+      - gridcell "terrain.plain 1,2":
+        - generic: "1"
+      - gridcell "terrain.plain 2,2":
+        - generic: "2"
+      - gridcell "terrain.road 3,2":
+        - generic: "3"
+      - gridcell "terrain.plain 4,2":
+        - generic: "4"
+      - gridcell "terrain.plain 5,2":
+        - generic: "5"
+      - gridcell "terrain.plain 6,2 ENEMY Development Enemy 125":
+        - strong: E
+        - generic: "125"
+      - gridcell "terrain.plain 0,3":
+        - generic: "1"
+      - gridcell "terrain.wall 1,3"
+      - gridcell "terrain.forest 2,3":
+        - generic: "4"
+      - gridcell "terrain.swamp 3,3"
+      - gridcell "terrain.forest 4,3"
+      - gridcell "terrain.wall 5,3"
+      - gridcell "terrain.plain 6,3"
+      - gridcell "terrain.plain 0,4":
+        - generic: "2"
+      - gridcell "terrain.plain 1,4":
+        - generic: "3"
+      - gridcell "terrain.plain 2,4":
+        - generic: "4"
+      - gridcell "terrain.plain 3,4":
+        - generic: "5"
+      - gridcell "terrain.plain 4,4"
+      - gridcell "terrain.plain 5,4"
+      - gridcell "terrain.water 6,4"
+    - generic "Battle commands":
+      - button "Bow 2/2" [disabled]
+      - button "Charge 3/3" [disabled]
+      - button "Tactic 6/6" [disabled]
+      - button "Wait"
+      - button "Path 0/0" [disabled]
+    - paragraph: No movement path
+    - button "End turn"
+  - heading "Milestone 13 scope" [level=2]
+  - paragraph: This page provides twenty manual save slots, explicit fallback repair, recovery choice, transactional BattleSession replacement, v9-compatible battle audio, Battle-owned visual effects, and v9-compatible title and result sequences. It remains a development fixture and contains no canonical character data.

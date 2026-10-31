@@ -76,7 +76,9 @@ test("ninth chapter wins from the original formation and reproduces six saves th
         ...((checkpoint?.turn ?? 1) < 2 ? [`${id}_relief`] : []),
         ...((checkpoint?.turn ?? 1) < 6 ? [`${id}_defection`] : []), stage.victoryDialogue.id
       ];
-      assert.deepEqual(requests.filter(request => request.type === "DIALOGUE" && request.dialogue !== stage.introDialogue)
+      // Tactic reactions are interleaved; the chapter event sequence remains unchanged.
+      assert.deepEqual(requests.filter(request => request.type === "DIALOGUE" && request.dialogue !== stage.introDialogue
+        && request.dialogue.id !== "tactic_success")
         .map(request => request.dialogue.id), expectedDialogues);
       assert.equal(requests.filter(request => request.type === "BATTLE_RESULT").length, 1);
       assert.equal(requests.at(-2).type, "BATTLE_RESULT");
@@ -150,7 +152,8 @@ test("ninth chapter preserves simultaneous defection and relief across saves bef
       assert.equal(controller.getBattleResult(), null, "this route verifies events, not victory");
       assert.equal(stage.armyManager.playerArmy.getUnits().length, 36, "one defector and four rescuers join exactly once");
       for (const unitId of ["yu_baosi", ...rescuers]) assert.equal(stage.getUnit(unitId).actionState, "FINISHED");
-      const eventDialogues = requests.filter(request => request.type === "DIALOGUE" && request.dialogue !== stage.introDialogue);
+      const eventDialogues = requests.filter(request => request.type === "DIALOGUE" && request.dialogue !== stage.introDialogue
+        && request.dialogue.id !== "tactic_success");
       assert.deepEqual(eventDialogues.map(request => request.dialogue.id), checkpoint?.turn === 6 ? [] : [`${id}_defection`, `${id}_relief`]);
       const eventLogs = stage.battleLog.getEntries().filter(entry => entry.type === "EVENT");
       assert.equal(eventLogs.filter(entry => entry.text.includes("郁保四が寝返った")).length, 1);

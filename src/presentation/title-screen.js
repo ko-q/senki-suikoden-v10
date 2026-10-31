@@ -60,6 +60,7 @@ export class TitleScreen {
   #timers;
   #started;
   #introStarted;
+  #introAnimating = false;
   #ready;
   #closed;
   #disposed;
@@ -163,17 +164,29 @@ export class TitleScreen {
     }
   }
 
-  async #beginIntro() {
+  #beginIntro() {
     this.#introStarted = true;
     this.#elements.prompt.setAttribute("aria-hidden", "true");
-    await safeInvoke(this.#onPrepare);
-    if (this.#disposed || this.#closed) {
+    // A suspended AudioContext may never settle resume(). Keep the game reachable.
+    const timer = this.#schedule(1000, () => this.#animateIntro(false));
+    safeInvoke(this.#onPrepare).then((prepared) => {
+      clearTimeout(timer);
+      this.#timers.delete(timer);
+      this.#animateIntro(prepared !== false);
+    });
+  }
+
+  #animateIntro(withAudio) {
+    if (this.#disposed || this.#closed || this.#introAnimating) {
       return;
     }
+    this.#introAnimating = true;
     this.#elements.root.classList.add("intro");
-    safeInvoke(this.#onThunder);
-    this.#schedule(this.#timing.WHITEOUT_AUDIO_MS, () => safeInvoke(this.#onWhiteout));
-    this.#schedule(this.#timing.TITLE_THEME_MS, () => safeInvoke(this.#onTitleTheme));
+    if (withAudio) {
+      safeInvoke(this.#onThunder);
+      this.#schedule(this.#timing.WHITEOUT_AUDIO_MS, () => safeInvoke(this.#onWhiteout));
+      this.#schedule(this.#timing.TITLE_THEME_MS, () => safeInvoke(this.#onTitleTheme));
+    }
     this.#schedule(this.#timing.READY_MS, () => this.#setReady());
   }
 
@@ -212,5 +225,6 @@ export class TitleScreen {
       callback();
     }, duration);
     this.#timers.add(timerId);
+    return timerId;
   }
 }

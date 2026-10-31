@@ -51,7 +51,7 @@ const ZERO_EFFECT_DURATIONS = Object.freeze(Object.fromEntries(
     .map((type) => [type, 0])
 ));
 
-function createScreenRuntime(stage, { visualSession = null, keyboardTarget = null } = {}) {
+function createScreenRuntime(stage, { visualSession = null, keyboardTarget = null, advanceTacticDialogues = true } = {}) {
   const elements = createFakeBattleElements();
   const renderer = new BattleRenderer(elements, keyboardTarget ? { keyboardTarget } : {});
   const effectManager = new BattleEffectManager({
@@ -79,7 +79,25 @@ function createScreenRuntime(stage, { visualSession = null, keyboardTarget = nul
     tacticService,
     statusService,
     aiService,
-    presentationPort: screen
+    presentationPort: {
+      async present(request, signal) {
+        const pending = screen.present(request, signal);
+        pending.catch(() => {});
+        // Route tests operate the same Next button for each tactic result line.
+        // Dedicated interaction tests below keep these dialogues under manual control.
+        if (advanceTacticDialogues && request.type === PresentationRequestType.DIALOGUE
+          && request.dialogue.id === "tactic_success") {
+          for (const speech of request.dialogue.speeches) {
+            await waitUntil(() => !elements.dialogueOverlay.hidden
+              && elements.dialogueText.textContent === speech.text, "TACTIC_RESULT_LINE");
+            assert.equal(screen.mode, InteractionMode.LOCKED);
+            elements.dialogueNextButton.dispatch("click");
+            await new Promise(setImmediate);
+          }
+        }
+        return pending;
+      }
+    }
   });
   screen.connectCommandPort(controller);
   return { battleRandom, controller, elements, screen };
@@ -99,6 +117,112 @@ function isRenderedMode(runtime, mode) {
   return runtime.screen.mode === mode
     && runtime.elements.modeValue.textContent === mode;
 }
+
+test("chapter two commands and hints follow current or preview position without changing the battle", async () => {
+  const restore = installFakeDocument(), characters = createV9CharacterManager(), id = "wild-boar-forest";
+  const stage = new StageFactory({ characterManager: characters, terrainCatalog: createV9CompatibleTerrainCatalog(),
+    definitions: [createV9OpeningStageDefinition(id, characters)] }).create(id);
+  const runtime = createScreenRuntime(stage), { controller, screen, elements, battleRandom } = runtime;
+  const completion = controller.startNewBattle(); completion.catch(() => {});
+  const cell = (x, y) => elements.board.children[y * stage.map.width + x];
+  try {
+    for (const speech of stage.introDialogue.speeches) {
+      await waitUntil(() => !elements.dialogueOverlay.hidden && elements.dialogueText.textContent === speech.text, "SECOND_INTRO");
+      elements.dialogueNextButton.dispatch("click");
+    }
+    await waitUntil(() => !elements.missionOverlay.hidden, "SECOND_MISSION");
+    elements.missionStartButton.dispatch("click");
+    await waitUntil(() => isRenderedMode(runtime, InteractionMode.UNIT_SELECT), "SECOND_READY");
+    const before = createStageDigest(stage), random = battleRandom.exportState();
+    cell(3, 12).dispatch("click");
+    assert.equal(elements.chargeButton.disabled, true);
+    assert.equal(elements.tacticButton.disabled, true);
+    assert.match(elements.instructionText.textContent, /移動せず向きだけ変える場合は「待機」/);
+    assert.doesNotMatch(elements.instructionText.textContent, /使用可能/);
+    cell(4, 10).dispatch("click");
+    assert.equal(screen.mode, InteractionMode.MOVE_PREVIEW);
+    assert.equal(elements.chargeButton.disabled, false);
+    assert.equal(elements.tacticButton.disabled, false);
+    assert.match(elements.instructionText.textContent, /突撃3\/3・撹乱Lv1 4\/4/);
+    assert.match(elements.instructionText.textContent, /敵の方向へ攻撃せず向きたい場合は「待機」/);
+    assert.equal(elements.pathButton.hidden, false);
+    assert.equal(elements.pathButton.disabled, false);
+    assert.equal(elements.pathButton.textContent, "経路 1/3");
+    elements.pathButton.dispatch("click");
+    assert.equal(elements.pathButton.textContent, "経路 2/3");
+    elements.tacticButton.dispatch("click");
+    assert.equal(elements.pathButton.hidden, true);
+    assert.equal(elements.pathButton.disabled, true);
+    elements.confusionLv1Button.dispatch("click");
+    elements.pathButton.dispatch("click");
+    assert.equal(elements.pathButton.textContent, "経路 2/3");
+    assert.match(elements.instructionText.textContent, /対象：選択した敵1部隊。射程3・壁越し不可、消費1回/);
+    assert.match(elements.instructionText.textContent, /残り4\/4回/);
+    elements.resetButton.dispatch("click");
+    cell(4, 10).dispatch("click");
+    elements.chargeButton.dispatch("click");
+    assert.equal(elements.pathButton.hidden, true);
+    assert.match(elements.instructionText.textContent, /隣接する敵に大ダメージ/);
+    assert.match(elements.instructionText.textContent, /残り3\/3回/);
+    elements.resetButton.dispatch("click");
+    assert.equal(createStageDigest(stage), before);
+    assert.deepEqual(battleRandom.exportState(), random);
+    elements.resetButton.dispatch("click");
+    assert.equal(elements.chargeButton.disabled, true);
+    assert.equal(elements.tacticButton.disabled, true);
+    assert.doesNotMatch(elements.instructionText.textContent, /使用可能/);
+    cell(3, 12).dispatch("click"); cell(4, 10).dispatch("click");
+    assert.equal(elements.pathButton.hidden, false);
+    elements.waitButton.dispatch("click");
+    assert.equal(elements.pathButton.hidden, true);
+    assert.equal(elements.pathButton.disabled, true);
+  } finally { screen.dispose(); controller.dispose(); await completion.catch(() => {}); restore(); }
+});
+
+test("turn-end confirmation preserves selection on cancel, blocks other input, and commits only once", async () => {
+  const restore = installFakeDocument();
+  const stage = createServiceStage({ units: [
+    { id: "lin", character: { name: "林冲" }, army: Affiliation.PLAYER, position: { x: 0, y: 2 }, maxTroops: 1000 },
+    { id: "enemy", position: { x: 4, y: 0 }, maxTroops: 1000 }
+  ] });
+  const runtime = createScreenRuntime(stage), { screen, controller, elements, battleRandom } = runtime;
+  const completion = controller.startNewBattle(); completion.catch(() => {});
+  try {
+    await waitUntil(() => isRenderedMode(runtime, InteractionMode.UNIT_SELECT), "TURN_CONFIRM_READY");
+    elements.board.children[10].dispatch("click");
+    const before = createStageDigest(stage), random = battleRandom.exportState();
+    for (const cancel of [() => elements.cancelTurnEndButton.dispatch("click"),
+      () => elements.turnEndOverlay.dispatch("keydown", { key: "Escape" })]) {
+      elements.endTurnButton.dispatch("click");
+      assert.equal(elements.turnEndOverlay.hidden, false);
+      assert.match(elements.turnEndMessage.textContent, /未行動の味方部隊が1部隊います。\n林冲/);
+      assert.equal(screen.mode, InteractionMode.LOCKED);
+      elements.board.children[5].dispatch("click"); elements.waitButton.dispatch("click");
+      elements.resetButton.dispatch("click"); elements.endTurnButton.dispatch("click");
+      assert.equal(createStageDigest(stage), before);
+      assert.deepEqual(battleRandom.exportState(), random);
+      cancel();
+      assert.equal(elements.turnEndOverlay.hidden, true);
+      assert.equal(screen.mode, InteractionMode.UNIT_SELECTED);
+      assert.equal(elements.endTurnButton.disabled, false);
+      assert.equal(createStageDigest(stage), before);
+    }
+    assert.equal(elements.cancelTurnEndButton.focusCount, 2);
+    elements.endTurnButton.dispatch("click");
+    elements.confirmTurnEndButton.dispatch("click");
+    elements.confirmTurnEndButton.dispatch("click");
+    await waitUntil(() => stage.turn === 2 && isRenderedMode(runtime, InteractionMode.UNIT_SELECT), "TURN_CONFIRMED");
+    assert.equal(elements.turnEndOverlay.hidden, true);
+    elements.endTurnButton.dispatch("click");
+    assert.equal(elements.turnEndOverlay.hidden, false);
+    const atDisposal = createStageDigest(stage);
+    screen.dispose();
+    assert.equal(elements.turnEndOverlay.hidden, true);
+    assert.equal(elements.confirmTurnEndButton.listeners.size, 0);
+    elements.confirmTurnEndButton.dispatch("click");
+    assert.equal(createStageDigest(stage), atDisposal);
+  } finally { screen.dispose(); controller.dispose(); await completion.catch(() => {}); restore(); }
+});
 
 test("first chapter screen inputs preserve previews and escape on the destination click before closing dialogue", async () => {
   const restore = installFakeDocument(), characters = createV9CharacterManager(), id = "shaohuashan-road";
@@ -246,6 +370,7 @@ test("third chapter screen inputs reach escape after the convoy, pursuit dialogu
       }
       if (index < CONVOY_ESCAPE_ROUTE.length - 1) {
         elements.endTurnButton.dispatch("click");
+        if (!elements.turnEndOverlay.hidden) elements.confirmTurnEndButton.dispatch("click");
         await waitUntil(() => stage.turn === index + 2 && isRenderedMode(runtime, InteractionMode.UNIT_SELECT), "CONVOY_NEXT_TURN");
       }
       assert.equal(stage.validateRuntime(), true);
@@ -576,7 +701,7 @@ test("seventh chapter screen completes illusion, a fatal trap and annihilation t
       if (index < SORCERY_VICTORY_ROUTE.length - 1) {
         elements.endTurnButton.dispatch("click");
         if (index === 4) {
-          await waitUntil(() => !elements.dialogueOverlay.hidden, "SORCERY_FATAL_TRAP");
+          await waitUntil(() => !elements.dialogueOverlay.hidden && elements.dialogueAction.textContent === "罠", "SORCERY_FATAL_TRAP");
           assert.equal(elements.dialogueText.textContent, "ぐっ……足元に罠が……！");
           const unit = stage.getUnit("sun_li_gaotang");
           assert.equal(unit.troops, 0); assert.equal(unit.actionState, "FINISHED");
@@ -1344,7 +1469,7 @@ test("BattleScreen commits Confusion Lv2 then requires final tactic facing", asy
       ]
     });
     const keyboardTarget = new FakeElement();
-    const runtime = createScreenRuntime(stage, { keyboardTarget });
+    const runtime = createScreenRuntime(stage, { keyboardTarget, advanceTacticDialogues: false });
     const completion = runtime.controller.startNewBattle();
     await waitUntil(
       () => isRenderedMode(runtime, InteractionMode.UNIT_SELECT),
@@ -1355,6 +1480,23 @@ test("BattleScreen commits Confusion Lv2 then requires final tactic facing", asy
     runtime.elements.tacticButton.dispatch("click");
     runtime.elements.confusionLv2Button.dispatch("click");
     runtime.elements.board.children[2].dispatch("click");
+    await waitUntil(() => !runtime.elements.dialogueOverlay.hidden, "CONFUSION_SUCCESS_DIALOGUE");
+    assert.equal(runtime.elements.dialogueText.textContent, "かかった。敵の動きは乱れたぞ！");
+    assert.equal(runtime.elements.dialogueAction.textContent, "撹乱成功");
+    assert.equal(runtime.screen.mode, InteractionMode.LOCKED);
+    assert.equal(runtime.controller.isStableForSave(), false);
+    assert.equal(runtime.elements.endTurnButton.disabled, true);
+    const duringDialogue = createStageDigest(stage), duringRandom = runtime.battleRandom.exportState();
+    keyboardTarget.dispatch("keydown", { key: "Escape" });
+    runtime.elements.board.children[1].dispatch("click");
+    assert.equal(createStageDigest(stage), duringDialogue);
+    assert.deepEqual(runtime.battleRandom.exportState(), duringRandom);
+    assert.equal(runtime.elements.dialogueOverlay.hidden, false);
+    runtime.elements.dialogueNextButton.dispatch("click");
+    assert.equal(runtime.elements.dialogueText.textContent, "何だ……命令が聞き取れん！　隊列が崩れる！");
+    assert.equal(runtime.elements.dialogueAction.textContent, "撹乱状態");
+    assert.equal(runtime.screen.mode, InteractionMode.LOCKED);
+    runtime.elements.dialogueNextButton.dispatch("click");
     await waitUntil(
       () => runtime.controller.flowState === BattleFlowState.IDLE
         && runtime.screen.mode === InteractionMode.TACTIC_FACING_SELECT,
@@ -1534,6 +1676,7 @@ test("enemy turns focus the acting unit through movement, stationary attacks and
   try {
     await waitUntil(() => isRenderedMode(runtime, InteractionMode.UNIT_SELECT), "FOCUS_START");
     runtime.elements.endTurnButton.dispatch("click");
+    runtime.elements.confirmTurnEndButton.dispatch("click");
     await waitUntil(() => stage.turn === 2 && isRenderedMode(runtime, InteractionMode.UNIT_SELECT), "FOCUS_END");
     const movement = frames.filter(({ request }) => request.type === "MOVE");
     assert.equal(movement.length, 2);

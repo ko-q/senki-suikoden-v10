@@ -44,7 +44,7 @@ button:disabled{opacity:.55;cursor:default}
 .unit-summary{margin:0;padding:0;border:0;background:transparent;font-size:13px;line-height:1.5;white-space:pre-line;color:#3f3428}.selected-portrait{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:40px;height:48px;min-width:0;border:1px solid #8b6a40;border-radius:6px}
 .command-toolbar,.tactic-buttons,.facing-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0}
 .command-dock button{min-height:42px;padding:5px 3px;border:1px solid #493722;border-radius:9px;background:linear-gradient(#fffaf0,#dfcfb3);color:#493722;font-size:13px;font-weight:900}
-.command-dock #chargeButton{background:linear-gradient(#e89666,#b55b32);color:white}.command-dock #tacticButton{background:linear-gradient(#9870b1,#6b4485);color:white}.command-dock #waitButton{background:linear-gradient(#6e9562,#466c3a);color:white}
+.command-dock #chargeButton:enabled{background:linear-gradient(#e89666,#b55b32);color:white}.command-dock #tacticButton:enabled{background:linear-gradient(#9870b1,#6b4485);color:white}.command-dock #waitButton:enabled{background:linear-gradient(#6e9562,#466c3a);color:white}
 .command-footer{display:flex;gap:6px;margin-top:6px}.command-footer #resetButton{flex:0 0 76px}.instruction{flex:1;margin:0;padding:5px 8px;border:1px solid #bca47e;border-radius:9px;background:#fff8e9;color:#493722;font-size:12px;line-height:1.35}
 .tactic-panel,.facing-panel{margin:0;padding:0;border:0;background:none}.tactic-buttons{grid-template-columns:repeat(3,minmax(0,1fr))}.facing-panel{margin-top:6px}
 .player-overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:18px;background:#18120dde;backdrop-filter:blur(5px)}
@@ -123,4 +123,9 @@ button:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid #17799f;outl
 
 @media(prefers-reduced-motion:reduce){.selection-ring{animation:none;opacity:.75}}
 #selectedUnitInfo[hidden]{display:none}
+.turn-end-overlay{z-index:80}
+.turn-end-overlay .player-card{max-width:440px}
+#turnEndMessage{white-space:pre-line;line-height:1.7;overflow-wrap:anywhere}
+.turn-end-actions{display:flex;gap:12px;justify-content:flex-end}
+.turn-end-actions button{flex:1;width:auto;padding:10px}
 #resultNextBattleButton{margin-right:8px;background:linear-gradient(#557694,#36526c);color:#fff}

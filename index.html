@@ -100,6 +100,12 @@
             <div class="dialogue-card"><div id="dialoguePortrait" class="character-portrait dialogue-portrait" hidden></div><p class="dialogue-heading"><span id="dialogueSpeaker" class="dialogue-speaker"></span><span id="dialogueAction" class="dialogue-action" hidden></span></p><p id="dialogueText" class="dialogue-text"></p><button id="dialogueNextButton" class="primary-button" type="button">進む</button></div>
           </section>
           <section id="unitDetailOverlay" class="unit-detail-overlay" role="dialog" aria-modal="true" aria-label="部隊の能力詳細" tabindex="-1" hidden></section>
+          <section id="turnEndOverlay" class="player-overlay turn-end-overlay" hidden>
+            <div class="player-card" role="dialog" aria-modal="true" aria-labelledby="turnEndTitle" aria-describedby="turnEndMessage">
+              <h2 id="turnEndTitle">ターン終了の確認</h2><p id="turnEndMessage"></p>
+              <div class="turn-end-actions"><button id="cancelTurnEndButton" type="button">戻る</button><button id="confirmTurnEndButton" class="main-button" type="button">ターン終了</button></div>
+            </div>
+          </section>
           <section id="missionOverlay" class="player-overlay" hidden><div class="player-card mission-card"><h2>作戦条件</h2><h3>勝利条件</h3><p id="missionVictory"></p><h3>敗北条件</h3><p id="missionDefeat"></p><button id="missionStartButton" class="main-button" type="button">戦闘開始</button></div></section>
           <section id="resultEffectLayer" class="battle-result-effect-host" aria-hidden="true" hidden></section>
         </div>

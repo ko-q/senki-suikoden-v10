@@ -15,6 +15,7 @@ import { Stage, StagePhase } from "../domain/stage.js";
 import { Facing, UnitActionState } from "../domain/unit.js";
 import { BattleEffectManager } from "./battle-effect-manager.js";
 import { MovePreviewState } from "./move-preview-state.js";
+import { selectionInstruction, targetInstruction } from "./selection-instructions.js";
 import { BattleRenderer } from "./battle-renderer.js";
 import { DialogueController } from "./dialogue-controller.js";
 import { directionBetween } from "../services/action-targeting-rules.js";
@@ -78,6 +79,7 @@ export class BattleScreen {
   #commandPending;
   #dialoguePending;
   #missionPending = null;
+  #turnEndConfirmation = null;
   #disposed;
 
   constructor({ stage, renderer, effectManager, dialogueController = new DialogueController() }) {
@@ -112,6 +114,7 @@ export class BattleScreen {
       onCell: (position) => this.#handleCell(position),
       onClear: () => this.#handleClear(),
       onEndTurn: () => this.#handleEndTurn(),
+      onEndTurnDecision: (accepted) => this.#handleEndTurnDecision(accepted),
       onFacing: (facing) => this.#handleFacing(facing),
       onNextDialogue: () => this.#handleNextDialogue(),
       onPath: () => this.#handlePath(),
@@ -172,6 +175,7 @@ export class BattleScreen {
       return;
     }
     this.#disposed = true;
+    this.#turnEndConfirmation = null;
     if (this.#missionPending) this.#missionPending.handleAbort();
     if (this.#dialoguePending !== null) {
       const pending = this.#dialoguePending;
@@ -307,16 +311,17 @@ export class BattleScreen {
   }
 
   #handlePath() {
-    if (
-      this.#isInputLocked()
-      || !this.#isBaseSelectionMode()
-      || this.#preview.paths.length <= 1
-    ) {
+    if (!this.#canChangePath()) {
       return;
     }
     this.#preview.nextPath();
     this.#refreshActionQuery();
     this.refresh();
+  }
+
+  #canChangePath() {
+    return !this.#isInputLocked() && this.#isBaseSelectionMode()
+      && this.#preview.paths.length > 1;
   }
 
   #handleTacticMenu() {
@@ -400,7 +405,22 @@ export class BattleScreen {
       return;
     }
     const unacted = this.#stage.unitOrder.filter((unit) => this.#isSelectablePlayerUnit(unit));
-    if (unacted.length && typeof globalThis.confirm === "function" && !globalThis.confirm(`未行動の味方部隊が${unacted.length}部隊います。\n${unacted.map((unit) => unit.character.name).join("、")}\n\nこのままターンを終了しますか？`)) return;
+    if (unacted.length) {
+      this.#turnEndConfirmation = unacted.map(unit => unit.character.name);
+      this.refresh();
+      return;
+    }
+    this.#endTurn();
+  }
+
+  #handleEndTurnDecision(accepted) {
+    if (this.#disposed || this.#turnEndConfirmation === null) return;
+    this.#turnEndConfirmation = null;
+    if (accepted && this.#canEndTurn()) this.#endTurn();
+    else this.refresh();
+  }
+
+  #endTurn() {
     this.#clearSelection();
     this.#runCommand(
       () => this.#commandPort.endPlayerTurn(),
@@ -606,6 +626,7 @@ export class BattleScreen {
       || this.#commandPending
       || this.#dialogueController.isActive
       || this.#missionPending !== null
+      || this.#turnEndConfirmation !== null
       || this.#commandPort.getBattleResult() !== null
       || this.#commandPort.flowState !== BattleFlowState.IDLE;
   }
@@ -682,6 +703,7 @@ export class BattleScreen {
       : null;
     return Object.freeze({
       mode: this.#effectiveMode(),
+      turnEndConfirmation: this.#turnEndConfirmation,
       battleFinished: this.#commandPort.getBattleResult() !== null,
       domainLabel: this.#domainLabel(),
       instruction: this.#instruction(),
@@ -703,6 +725,7 @@ export class BattleScreen {
       inputLocked,
       canWait: this.#canWait(),
       canEndTurn: this.#canEndTurn(),
+      canChangePath: this.#canChangePath(),
       showPrimaryCommands: !inputLocked
         && this.#selectedUnit !== null
         && this.#isBaseSelectionMode(),
@@ -731,28 +754,23 @@ export class BattleScreen {
       return "エラーが発生したため戦闘を停止しました。";
     }
     if (mode === InteractionMode.LOCKED) {
+      if (this.#turnEndConfirmation) return "未行動の部隊を確認しています。";
       return "行動を処理しています。";
     }
     if (mode === InteractionMode.UNIT_SELECT) {
       return "行動する味方の部隊を選んでください。";
     }
     if (mode === InteractionMode.UNIT_SELECTED) {
-      return "青い丸で移動、隣接する敵で攻撃します。";
+      return selectionInstruction(this.#selectedUnit, this.#availableActions);
     }
     if (mode === InteractionMode.MOVE_PREVIEW) {
-      return "赤い印で攻撃、黄色のマスで向きを決めて待機します。";
+      return selectionInstruction(this.#selectedUnit, this.#availableActions, true);
     }
     if (mode === InteractionMode.CONFUSION_LEVEL_SELECT) {
       return "使用する計略を選んでください。撹乱はレベル分の回数を消費します。";
     }
-    if (mode === InteractionMode.BOW_TARGET_SELECT) {
-      return "赤い印の遠距離攻撃対象を選んでください。";
-    }
-    if (mode === InteractionMode.CHARGE_TARGET_SELECT) {
-      return "赤い印の敵を選んで突撃します。";
-    }
     if (TARGET_SELECT_MODE_SET.has(mode)) {
-      return "赤い印の計略対象を選んでください。";
+      return targetInstruction(this.#selectedUnit, this.#selectedActionType);
     }
     if (mode === InteractionMode.WAIT_FACING_SELECT) {
       return "隣接する黄色のマスで向きを決定。戻るで移動を取り消します。";

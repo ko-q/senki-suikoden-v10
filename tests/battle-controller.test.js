@@ -38,6 +38,57 @@ class RecordingPresentationPort {
   }
 }
 
+test("player and enemy tactic success dialogues finish before checkpoints or the next phase, and abort safely", async () => {
+  for (const enemy of [false, true]) for (const abort of [false, true]) {
+    const stage = createServiceStage({ units: [
+      { id: "caster", army: enemy ? "ENEMY" : "PLAYER", position: { x: 0, y: 0 }, move: 0,
+        character: { intelligence: 100 }, abilities: [UnitAbility.CONFUSION_LEVEL_1], maxUses: { strategy: 2 } },
+      { id: "target", army: enemy ? "PLAYER" : "ENEMY", position: { x: 2, y: 0 }, move: 0,
+        character: { intelligence: 0 } }
+    ] });
+    let release;
+    const port = new RecordingPresentationPort();
+    port.present = async (request, signal) => {
+      port.requests.push(request);
+      if (request.type !== "DIALOGUE" || request.dialogue.id !== "tactic_success") return;
+      await new Promise((resolve, reject) => {
+        const cancel = () => reject(Object.assign(new Error("TEST_ABORT"), { name: "AbortError" }));
+        release = () => { signal.removeEventListener("abort", cancel); resolve(); };
+        signal.addEventListener("abort", cancel, { once: true });
+      });
+    };
+    const runtime = createControllerRuntime(stage, { presentationPort: port });
+    const { completion } = await startNewBattle(runtime); completion.catch(() => {});
+    const action = enemy ? runtime.controller.endPlayerTurn()
+      : runtime.controller.executeAction(createActionRequest(ActionType.CONFUSION_LV1, stage.getUnit("caster"), stage.getUnit("target")));
+    action.catch(() => {});
+    try {
+      await waitUntil(() => typeof release === "function", "TACTIC_RESULT_WAIT");
+      assert.equal(runtime.controller.isStableForSave(), false);
+      assert.equal(stage.turn, 1);
+      assert.equal(stage.phase, enemy ? "ENEMY" : "PLAYER");
+      assert.equal(port.requests.at(-1).dialogue.speeches[0].speaker, stage.getUnit("caster").character);
+      const before = createStageDigest(stage), random = runtime.battleRandom.exportState();
+      const saves = runtime.checkpointPort.snapshots.length;
+      assert.equal(await runtime.controller.endPlayerTurn(), false);
+      assert.equal(await runtime.controller.finalizeTacticFacing(stage.getUnit("caster"), Facing.NORTH), false);
+      assert.equal(createStageDigest(stage), before);
+      assert.deepEqual(runtime.battleRandom.exportState(), random);
+      if (abort) {
+        runtime.controller.dispose();
+        await assert.rejects(action, { name: "AbortError" });
+        assert.equal(runtime.checkpointPort.snapshots.length, saves);
+        assert.equal(createStageDigest(stage), before);
+      } else {
+        release(); assert.equal(await action, true);
+        assert.equal(stage.turn, enemy ? 2 : 1);
+        assert.equal(runtime.checkpointPort.snapshots.length > saves, true);
+      }
+      assert.deepEqual(runtime.controller.getDiagnostics(), []);
+    } finally { runtime.controller.dispose(); await completion.catch(() => {}); }
+  }
+});
+
 class RecordingCheckpointPort {
   constructor() {
     this.snapshots = [];

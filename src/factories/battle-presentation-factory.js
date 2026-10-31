@@ -1,6 +1,7 @@
 import { invariant } from "../core/domain-error.js";
-import { createSemanticPresentationRequest as request, PresentationRequestType as Type } from "../core/presentation-request.js";
+import { createDialoguePresentationRequest, createSemanticPresentationRequest as request, PresentationRequestType as Type } from "../core/presentation-request.js";
 import { Stage } from "../domain/stage.js";
+import { createTacticSuccessDialogue } from "./tactic-dialogue-factory.js";
 
 function positionPayload(position) {
   return position === null ? null : { x: position.x, y: position.y };
@@ -79,6 +80,8 @@ export class BattlePresentationFactory {
     if (statusEntries.length > 0) {
       requests.push(request(Type.STATUS, { reason: operationType, actorId: actor.id, entries: statusEntries }));
     }
+    const dialogue = createTacticSuccessDialogue(result);
+    if (dialogue !== null) requests.push(createDialoguePresentationRequest(dialogue));
     return Object.freeze(requests);
   }
 

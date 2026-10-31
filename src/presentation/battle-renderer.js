@@ -13,6 +13,7 @@ import { SelectionRingView } from "./selection-ring-view.js";
 import { TerrainInfoView, TERRAIN_NAMES } from "./terrain-info-view.js";
 import { BoardViewportLayout } from "./board-viewport-layout.js";
 import { BattleKeyboardControls } from "./battle-keyboard-controls.js";
+import { TurnEndConfirmation } from "./turn-end-confirmation.js";
 
 const TACTIC_BUTTONS = Object.freeze([
   Object.freeze({ key: "confusionLv1Button", type: ActionType.CONFUSION_LV1 }),
@@ -40,6 +41,10 @@ const REQUIRED_ELEMENT_KEYS = Object.freeze([
   "dialogueText",
   "domainValue",
   "endTurnButton",
+  "turnEndOverlay",
+  "turnEndMessage",
+  "cancelTurnEndButton",
+  "confirmTurnEndButton",
   "effectLayer",
   "eventText",
   "fireButton",
@@ -117,6 +122,7 @@ export class BattleRenderer {
   #visibleSelectionKey = null;
   #keyboard;
   #keyboardTarget;
+  #turnEndConfirmation;
   #detail; #gesture; #gestureBindings = []; #unitInfoBindings = []; #currentStage; #currentView;
 
   constructor(elements, { keyboardTarget = globalThis.document } = {}) {
@@ -140,6 +146,7 @@ export class BattleRenderer {
     onCell,
     onClear,
     onEndTurn,
+    onEndTurnDecision = () => {},
     onFacing,
     onNextDialogue,
     onPath,
@@ -173,6 +180,7 @@ export class BattleRenderer {
       onWait
     };
     this.#handlersBound = true;
+    this.#turnEndConfirmation = new TurnEndConfirmation(this.#elements, onEndTurnDecision);
     this.#keyboard = new BattleKeyboardControls({
       target: this.#keyboardTarget,
       root: this.#elements.board.closest?.("[data-battle-view-root]") ?? this.#elements.board,
@@ -247,6 +255,7 @@ export class BattleRenderer {
     }
     this.#clearBoardBindings();
     this.#keyboard?.dispose();
+    this.#turnEndConfirmation.dispose();
     for (const dispose of this.#unitInfoBindings) dispose();
     this.#unitInfoBindings = []; this.#gesture.cancel(); this.#detail.dispose();
     for (const binding of this.#eventBindings) {
@@ -307,6 +316,7 @@ export class BattleRenderer {
       this.#viewportLayout.keepCellVisible(selection);
       this.#visibleSelectionKey = selectionKey;
     }
+    this.#turnEndConfirmation.render(viewState.turnEndConfirmation);
   }
 
   renderPresentation(request) {
@@ -549,9 +559,8 @@ export class BattleRenderer {
       : `${tactic} ${useText(selectedUnit, UnitUse.TACTIC)}${tactic === "撹乱" ? ` Lv${confusionLevel(selectedUnit)}` : ""}`;
     this.#elements.tacticButton.disabled = viewState.inputLocked || !tacticAvailable;
 
-    this.#elements.pathButton.disabled = viewState.inputLocked
-      || viewState.candidatePaths.length <= 1;
-    this.#elements.pathButton.hidden = viewState.candidatePaths.length <= 1;
+    this.#elements.pathButton.disabled = !viewState.canChangePath;
+    this.#elements.pathButton.hidden = !viewState.canChangePath;
     this.#elements.pathButton.textContent = viewState.candidatePaths.length === 0
       ? "経路 0/0"
       : `経路 ${viewState.selectedPathIndex + 1}/${viewState.candidatePaths.length}`;

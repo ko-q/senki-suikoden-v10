@@ -77,3 +77,31 @@ test("disposing TitleScreen cancels pending callbacks and removes input listener
   assert.equal(elements.root.listeners.has("click"), false);
   assert.equal(elements.root.listeners.has("keydown"), false);
 });
+
+test("pending audio preparation cannot block the title or replay it when preparation settles late", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const discard of [false, true]) {
+    const elements = createFakeTitleElements(), calls = [];
+    let finishPrepare;
+    const screen = new TitleScreen({ elements, timing: SHORT_TIMING,
+      onPrepare: () => new Promise(resolve => { finishPrepare = resolve; }),
+      onThunder: () => calls.push("thunder"), onTitleTheme: () => calls.push("theme"),
+      onStart: () => calls.push("start") });
+    try {
+      screen.start(); elements.root.dispatch("click");
+      elements.root.dispatch("click");
+      if (discard) screen.dispose();
+      t.mock.timers.tick(1000); t.mock.timers.tick(20);
+      assert.equal(screen.isReady, !discard);
+      if (!discard) {
+        elements.root.dispatch("click"); t.mock.timers.tick(1);
+        assert.equal(elements.root.hidden, true);
+      }
+      assert.deepEqual(calls, discard ? [] : ["start"]);
+      finishPrepare(true); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      t.mock.timers.tick(2000);
+      assert.deepEqual(calls, discard ? [] : ["start"]);
+    } finally { screen.dispose(); }
+  }
+  t.mock.timers.reset();
+});

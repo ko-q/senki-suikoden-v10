@@ -1632,6 +1632,22 @@ test("long press inspects a preview without committing it and disposal cancels p
     assert.equal(overlay.hidden, false); assert.equal(runtime.screen.mode, InteractionMode.MOVE_PREVIEW);
     overlay.dispatch("click"); assert.equal(overlay.hidden, false);
     t.mock.timers.tick(251); overlay.dispatch("click"); assert.equal(overlay.hidden, true);
+    const info = runtime.elements.selectedUnitInfo;
+    info.dispatch("click"); assert.equal(overlay.hidden, false);
+    assert.match(text(overlay), /地形 森/); assert.match(text(overlay), /向き 東/);
+    for (const key of ["Enter", " ", "Escape"]) {
+      overlay.dispatch("keydown", { key, repeat: true }); assert.equal(overlay.hidden, false);
+    }
+    overlay.dispatch("keydown", { key: "Escape" }); assert.equal(overlay.hidden, true);
+    info.dispatch("keydown", { key: "Enter", repeat: true }); assert.equal(overlay.hidden, true);
+    info.dispatch("keydown", { key: "Enter", isComposing: true }); assert.equal(overlay.hidden, true);
+    info.dispatch("keydown", { key: "Enter" }); assert.equal(overlay.hidden, false);
+    overlay.dispatch("keydown", { key: " " }); assert.equal(overlay.hidden, true);
+    info.dispatch("pointerdown", pointer); t.mock.timers.tick(430);
+    info.dispatch("pointerup", pointer); info.dispatch("click");
+    assert.equal(overlay.hidden, false, "long-press release must not close or reopen the card");
+    t.mock.timers.tick(251); overlay.dispatch("click"); assert.equal(overlay.hidden, true);
+    assert.equal(runtime.screen.mode, InteractionMode.MOVE_PREVIEW);
     assert.equal(createStageDigest(stage), before); assert.deepEqual(runtime.battleRandom.exportState(), random);
     // Dragging cancels the timer and consumes the click generated after a scroll.
     cell.dispatch("pointerdown", pointer); cell.dispatch("pointermove", { ...pointer, clientY: 60 });

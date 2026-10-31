@@ -1,5 +1,6 @@
 import { UnitAbility as Ability, UnitUse } from "../domain/unit-ability.js";
 import { CharacterPortraitView } from "./character-portrait-view.js";
+import { ModalFocus } from "./modal-focus.js";
 import { getConfusionLevel as confusionLevel } from "../domain/unit-capabilities.js";
 export { confusionLevel };
 
@@ -17,27 +18,37 @@ const node = (tag, className, text = "") => {
 
 /** Read-only V9 ability card. Its DOM and portrait listener belong to one battle. */
 export class UnitDetailView {
-  #root; #portrait = null; #readyAt = Infinity; #bindings = []; #previousFocus = null;
+  #root; #portrait = null; #readyAt = Infinity; #bindings = []; #focus;
   constructor(root) {
     this.#root = root; root.hidden = true;
+    this.#focus = new ModalFocus({ root, initialFocus: root,
+      blockedRoots: [...(root.parentNode?.children ?? [])].filter(element => element !== root),
+      onEscape: () => this.hide() });
     const listen = (type, listener) => { root.addEventListener(type, listener); this.#bindings.push([type, listener]); };
     listen("pointerup", () => this.release());
     listen("click", () => { if (Date.now() >= this.#readyAt) this.hide(); });
     listen("keydown", (event) => {
-      if (["Escape", "Enter", " "].includes(event.key)) { event.preventDefault(); this.hide(); }
-      if (event.key === "Tab") { event.preventDefault(); root.focus(); }
+      if (event.defaultPrevented || event.isComposing) return;
+      if (["Enter", " "].includes(event.key)) {
+        event.preventDefault(); event.stopPropagation?.();
+        if (!event.repeat) this.hide();
+      }
     });
     listen("wheel", (event) => event.preventDefault());
     listen("touchmove", (event) => event.preventDefault());
   }
   show(unit, stage, position = stage.map.getPosition(unit), { keyboard = false, facing = unit.facing } = {}) {
     this.#portrait?.dispose();
-    this.#previousFocus = document.activeElement;
     const terrain = position ? stage.map.getCellAt(position.x, position.y).terrain : null;
     const card = node("div", "unit-detail-card"), head = node("div", "unit-detail-head");
     const portrait = node("div", "unit-detail-portrait"), info = node("div", "unit-detail-info");
     this.#portrait = new CharacterPortraitView(portrait); this.#portrait.render(unit.character);
-    info.append(node("h2", "unit-detail-name", unit.character.name),
+    const heading = node("h2", "unit-detail-name");
+    if (unit.character.alias && unit.character.alias !== "なし") {
+      heading.append(node("span", "unit-detail-alias", unit.character.alias));
+    }
+    heading.append(node("span", "", unit.character.name));
+    info.append(heading,
       node("div", "unit-detail-side", stage.armyManager.getAffiliation(unit) === "PLAYER" ? "味方部隊" : "敵部隊"));
     const projectile = unit.hasAbility(Ability.BOW_ATTACK) ? "弓撃" : unit.hasAbility(Ability.THROW_ATTACK) ? "投擲" : null;
     const tactic = tacticName(unit), level = confusionLevel(unit);
@@ -60,15 +71,16 @@ export class UnitDetailView {
       [Ability.SHIELD_COMBAT, "盾牌"], [Ability.ILLUSION, "幻術士"], [Ability.CHAIN_CAVALRY, "連環馬"]]) {
       if (unit.hasAbility(ability)) traits.append(node("span", "unit-detail-trait", label));
     }
-    card.append(traits, node("p", "unit-detail-hint", "画面をもう一度タップすると閉じます"));
-    this.#root.replaceChildren(card); this.#root.hidden = false; this.#readyAt = keyboard ? 0 : Infinity; this.#root.focus();
+    card.append(traits, node("p", "unit-detail-hint", "画面をもう一度タップすると閉じます"),
+      node("p", "unit-detail-hint keyboard-hint", "PC：Esc・Enter・Spaceでも閉じます"));
+    this.#root.replaceChildren(card); this.#root.hidden = false; this.#readyAt = keyboard ? 0 : Infinity;
+    this.#focus.activate();
   }
   release() { if (this.#readyAt === Infinity && !this.#root.hidden) this.#readyAt = Date.now() + 250; }
-  hide() {
-    const wasOpen = !this.#root.hidden;
+  hide({ restoreFocus = true } = {}) {
     this.#root.hidden = true; this.#portrait?.dispose(); this.#portrait = null; this.#root.replaceChildren(); this.#readyAt = Infinity;
-    if (wasOpen && this.#previousFocus?.isConnected) this.#previousFocus.focus();
+    this.#focus.deactivate({ restoreFocus });
   }
   get isOpen() { return !this.#root.hidden; }
-  dispose() { this.hide(); for (const [type, listener] of this.#bindings) this.#root.removeEventListener(type, listener); this.#bindings = []; }
+  dispose() { this.hide({ restoreFocus: false }); this.#focus.dispose(); for (const [type, listener] of this.#bindings) this.#root.removeEventListener(type, listener); this.#bindings = []; }
 }

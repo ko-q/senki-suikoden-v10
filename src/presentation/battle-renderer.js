@@ -190,18 +190,24 @@ export class BattleRenderer {
     });
     this.#detail = new UnitDetailView(this.#elements.unitDetailOverlay);
     this.#gesture = new LongPressGesture({
-      canOpen: () => this.#handlersBound && this.#currentStage?.phase === "PLAYER" && !this.#currentView?.inputLocked && !this.#detail.isOpen,
+      canOpen: () => this.#canShowUnitDetail(),
       open: (unit) => this.#showUnitDetail(unit), release: () => this.#detail.release()
     });
-    for (const element of [this.#elements.selectedUnitText, this.#elements.selectedUnitPortrait]) {
+    for (const element of [this.#elements.selectedUnitInfo]) {
       this.#unitInfoBindings.push(this.#gesture.bind(element, () => this.#currentView?.selectedUnit));
-      this.#listen(element, () => this.#gesture.consumeClick());
+      this.#listen(element, () => {
+        if (!this.#gesture.consumeClick()) this.#showUnitDetail(this.#currentView?.selectedUnit, true);
+      });
       this.#listen(element, (event) => {
-        if (["Enter", " "].includes(event.key) && this.#currentView?.selectedUnit && !this.#currentView.inputLocked) {
-          event.preventDefault(); this.#showUnitDetail(this.#currentView.selectedUnit, true);
+        if (!event.defaultPrevented && !event.isComposing && ["Enter", " "].includes(event.key)) {
+          event.preventDefault();
+          if (!event.repeat) this.#showUnitDetail(this.#currentView?.selectedUnit, true);
         }
       }, "keydown");
-      element.tabIndex = 0; element.setAttribute("role", "button"); element.setAttribute("aria-label", "部隊の能力詳細（長押し）");
+      element.tabIndex = 0; element.setAttribute("role", "button");
+      element.setAttribute("aria-keyshortcuts", "Enter Space");
+      element.setAttribute("aria-haspopup", "dialog");
+      element.setAttribute("title", "部隊の能力詳細（クリック・長押し・Enter）");
     }
     if (this.#elements.missionStartButton) this.#listen(this.#elements.missionStartButton, onMissionStart);
 
@@ -470,7 +476,14 @@ export class BattleRenderer {
     this.#eventBindings.push({ element, type, listener });
   }
 
+  #canShowUnitDetail() {
+    return this.#handlersBound && this.#currentStage?.phase === "PLAYER"
+      && this.#currentView && !this.#currentView.inputLocked && !this.#detail.isOpen
+      && this.#elements.board.isConnected !== false && !this.#elements.board.closest?.("[hidden], [inert]");
+  }
+
   #showUnitDetail(unit, keyboard = false) {
+    if (!unit || !this.#canShowUnitDetail()) return;
     const position = unit === this.#currentView.selectedUnit && this.#currentView.previewDestination
       ? this.#currentView.previewDestination : this.#currentStage.map.getPosition(unit);
     const facing = unit === this.#currentView.selectedUnit ? this.#currentView.previewFacing ?? unit.facing : unit.facing;
@@ -537,6 +550,8 @@ export class BattleRenderer {
     this.#elements.selectedUnitText.textContent = unit === null
       ? ""
       : `部隊情報：${unit.character.name}\n兵力 ${unit.troops}/${unit.maxTroops}　方向 ${facingNames[viewState.previewFacing ?? unit.facing]}　移動 ${unit.move}　状態 ${statuses.join("・") || "通常"}`;
+    this.#elements.selectedUnitInfo.setAttribute("aria-label",
+      `${this.#elements.selectedUnitText.textContent}。クリック・長押し・Enterで能力詳細`);
   }
 
   #renderControls(viewState) {

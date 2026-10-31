@@ -15,6 +15,6 @@ test("v10 save identifiers cannot collide with the v9 namespace", () => {
 });
 
 test("the real chapter catalog has its own content revision instead of loading development fixtures", () => {
-  assert.equal(GAME_VERSION, "10.0.0-dev.46");
+  assert.equal(GAME_VERSION, "10.0.0-dev.47");
   assert.equal(CONTENT_REVISION, "v10-v9-chapter-catalog-9");
 });

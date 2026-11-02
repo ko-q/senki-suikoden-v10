@@ -43,7 +43,7 @@ function createStageFactory(definitions = [DEVELOPMENT_STAGE_DEFINITION]) {
   });
 }
 
-function createGameRuntime({ storage = new MemoryStorage(), persistence = true, definitions } = {}) {
+function createGameRuntime({ storage = new MemoryStorage(), persistence = true, definitions, confirmAction = () => true } = {}) {
   const stageFactory = createStageFactory(definitions);
   const battleHost = new FakeElement();
   const { template, createdViews } = createFakeBattleViewTemplate();
@@ -64,7 +64,7 @@ function createGameRuntime({ storage = new MemoryStorage(), persistence = true, 
     : null;
   const panel = new PersistencePanel({
     elements: panelElements,
-    confirmAction: () => true
+    confirmAction
   });
   const resultPanel = new GameResultPanel({ elements: resultElements });
   const game = new Game({
@@ -338,6 +338,27 @@ test("Game keeps the current session when a selected manual slot changes before 
     runtime.game.dispose();
     restoreDocument();
   }
+});
+
+test("a storage event cancels an open save decision before a late acceptance can overwrite another tab", async () => {
+  const restore = installFakeDocument();
+  let decision;
+  const runtime = createGameRuntime({ confirmAction: (_, options) => new Promise(resolve => { decision = { ...options, resolve }; }) });
+  try {
+    runtime.game.start(); runtime.createdViews[0].elements.dialogueNextButton.dispatch("click");
+    await waitUntil(() => runtime.game.currentSession.controller.isStableForSave(), "SAVE_DECISION_READY");
+    runtime.game.saveManual("manual_01");
+    const session = runtime.game.currentSession;
+    const keys = new SaveRepository({ storage: runtime.storage }).slotKeys("manual_01");
+    runtime.panelElements.manualSlotList.children[0].children[2].children[0].dispatch("click");
+    runtime.storage.setItem(keys.primary, "another-tab-value");
+    assert.equal(runtime.game.handleStorageEvent({ key: keys.primary }), true);
+    assert.equal(decision.signal.aborted, true);
+    decision.resolve(true); await new Promise(setImmediate);
+    assert.equal(runtime.storage.getItem(keys.primary), "another-tab-value");
+    assert.equal(runtime.game.currentSession, session);
+    assert.match(runtime.panelElements.persistenceStatus.textContent, /別のタブ/);
+  } finally { runtime.game.dispose(); restore(); }
 });
 
 test("Game repairs a manual backup without replacing the current battle session", async () => {

@@ -19,23 +19,48 @@ const node = (tag, className, text = "") => {
 /** Read-only V9 ability card. Its DOM and portrait listener belong to one battle. */
 export class UnitDetailView {
   #root; #portrait = null; #readyAt = Infinity; #bindings = []; #focus;
+  #card = null; #pointer = null; #dragged = false;
   constructor(root) {
     this.#root = root; root.hidden = true;
     this.#focus = new ModalFocus({ root, initialFocus: root,
       blockedRoots: [...(root.parentNode?.children ?? [])].filter(element => element !== root),
       onEscape: () => this.hide() });
     const listen = (type, listener) => { root.addEventListener(type, listener); this.#bindings.push([type, listener]); };
-    listen("pointerup", () => this.release());
-    listen("click", () => { if (Date.now() >= this.#readyAt) this.hide(); });
+    listen("pointerdown", (event) => {
+      if (event.isPrimary === false) return;
+      this.#dragged = false;
+      this.#pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    });
+    listen("pointermove", (event) => {
+      if (this.#pointer && this.#pointer.id === event.pointerId
+        && Math.hypot(event.clientX - this.#pointer.x, event.clientY - this.#pointer.y) > 8) this.#dragged = true;
+    });
+    listen("pointerup", () => { this.#pointer = null; this.release(); });
+    listen("pointercancel", () => { this.#pointer = null; this.#dragged = true; this.release(); });
+    listen("click", () => {
+      if (this.#dragged) { this.#dragged = false; return; }
+      if (Date.now() >= this.#readyAt) this.hide();
+    });
     listen("keydown", (event) => {
       if (event.defaultPrevented || event.isComposing) return;
+      const card = this.#card;
+      if (card && ["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault(); event.stopPropagation?.();
+        const max = Math.max(0, card.scrollHeight - card.clientHeight);
+        const step = event.key.startsWith("Page") ? Math.max(1, card.clientHeight * .8) : 40;
+        const next = event.key === "Home" ? 0 : event.key === "End" ? max
+          : card.scrollTop + (["ArrowDown", "PageDown"].includes(event.key) ? step : -step);
+        card.scrollTop = Math.min(max, Math.max(0, next));
+        return;
+      }
       if (["Enter", " "].includes(event.key)) {
         event.preventDefault(); event.stopPropagation?.();
         if (!event.repeat) this.hide();
       }
     });
-    listen("wheel", (event) => event.preventDefault());
-    listen("touchmove", (event) => event.preventDefault());
+    for (const type of ["wheel", "touchmove"]) listen(type, (event) => {
+      if (event.target.closest?.(".unit-detail-card") !== this.#card) event.preventDefault();
+    });
   }
   show(unit, stage, position = stage.map.getPosition(unit), { keyboard = false, facing = unit.facing } = {}) {
     this.#portrait?.dispose();
@@ -47,7 +72,9 @@ export class UnitDetailView {
     if (unit.character.alias && unit.character.alias !== "なし") {
       heading.append(node("span", "unit-detail-alias", unit.character.alias));
     }
-    heading.append(node("span", "", unit.character.name));
+    const name = node(unit.character.reading ? "ruby" : "span", "", unit.character.name);
+    if (unit.character.reading) name.append(node("rt", "", unit.character.reading));
+    heading.append(name);
     info.append(heading,
       node("div", "unit-detail-side", stage.armyManager.getAffiliation(unit) === "PLAYER" ? "味方部隊" : "敵部隊"));
     const projectile = unit.hasAbility(Ability.BOW_ATTACK) ? "弓撃" : unit.hasAbility(Ability.THROW_ATTACK) ? "投擲" : null;
@@ -73,12 +100,14 @@ export class UnitDetailView {
     }
     card.append(traits, node("p", "unit-detail-hint", "画面をもう一度タップすると閉じます"),
       node("p", "unit-detail-hint keyboard-hint", "PC：Esc・Enter・Spaceでも閉じます"));
+    this.#card = card; this.#pointer = null; this.#dragged = false;
     this.#root.replaceChildren(card); this.#root.hidden = false; this.#readyAt = keyboard ? 0 : Infinity;
     this.#focus.activate();
   }
   release() { if (this.#readyAt === Infinity && !this.#root.hidden) this.#readyAt = Date.now() + 250; }
   hide({ restoreFocus = true } = {}) {
     this.#root.hidden = true; this.#portrait?.dispose(); this.#portrait = null; this.#root.replaceChildren(); this.#readyAt = Infinity;
+    this.#card = null; this.#pointer = null; this.#dragged = false;
     this.#focus.deactivate({ restoreFocus });
   }
   get isOpen() { return !this.#root.hidden; }

@@ -37,13 +37,6 @@ function requireElements(elements) {
   return elements;
 }
 
-function defaultConfirm(message) {
-  if (typeof globalThis.confirm !== "function") {
-    return false;
-  }
-  return globalThis.confirm(message);
-}
-
 function slotNumber(slotId) {
   const match = /^manual_(\d+)$/.exec(slotId);
   return match === null ? slotId : String(Number(match[1]));
@@ -90,8 +83,9 @@ export class PersistencePanel {
   #canSave;
   #disposed;
   #stageTitleForId;
+  #pendingConfirmation = null;
 
-  constructor({ elements, confirmAction = defaultConfirm, stageTitleForId = (id) => id }) {
+  constructor({ elements, confirmAction = () => false, stageTitleForId = (id) => id }) {
     this.#elements = requireElements(elements);
     invariant(typeof confirmAction === "function", "PERSISTENCE_CONFIRM_REQUIRED");
     this.#confirmAction = confirmAction;
@@ -146,13 +140,9 @@ export class PersistencePanel {
       if (this.#busy) {
         return;
       }
-      if (
-        this.#hasSession
-        && !this.#confirmAction("ステージ選択に戻りますか？ 未保存の進行は新しい戦闘を開始すると失われます。")
-      ) {
-        return;
-      }
-      this.#invoke(() => this.#handlers.onNewBattle());
+      const operation = () => this.#handlers.onNewBattle();
+      if (this.#hasSession) this.#confirm("ステージ選択に戻りますか？ 未保存の進行は新しい戦闘を開始すると失われます。", "ステージ選択", operation);
+      else this.#invoke(operation);
     });
     this.#listen(this.#elements.refreshSlotsButton, () => {
       if (!this.#available || this.#busy) {
@@ -238,11 +228,14 @@ export class PersistencePanel {
     this.#elements.persistenceStatus.dataset.tone = tone;
   }
 
+  cancelPendingConfirmation() { this.#cancelConfirmation(); }
+
   dispose() {
     if (this.#disposed) {
       return;
     }
     this.#disposed = true;
+    this.#cancelConfirmation();
     this.#clearSlotBindings();
     for (const binding of this.#staticBindings) {
       binding.element.removeEventListener(binding.type, binding.listener);
@@ -253,6 +246,7 @@ export class PersistencePanel {
   }
 
   #renderSlots() {
+    this.#cancelConfirmation();
     this.#clearSlotBindings();
     this.#elements.manualSlotList.replaceChildren();
     for (const inspection of this.#inspections) {
@@ -309,29 +303,17 @@ export class PersistencePanel {
     }
 
     this.#listenSlot(saveButton, () => {
-      if (
-        inspection.status !== "empty"
-        && !this.#confirmAction(`セーブ ${slotNumber(inspection.slotId)} を上書きしますか？`)
-      ) {
-        return;
-      }
-      this.#invoke(() => this.#handlers.onSave(inspection.slotId));
+      const operation = () => this.#handlers.onSave(inspection.slotId);
+      if (inspection.status !== "empty") this.#confirm(`セーブ ${slotNumber(inspection.slotId)} を上書きしますか？`, "上書き", operation);
+      else this.#invoke(operation);
     });
     this.#listenSlot(loadButton, () => {
-      if (
-        !this.#confirmAction(
-          `セーブ ${slotNumber(inspection.slotId)} を読み込みますか？ 現在の未保存の進行は失われます。`
-        )
-      ) {
-        return;
-      }
-      this.#invoke(() => this.#handlers.onLoad(inspection.slotId, inspection.guard));
+      this.#confirm(`セーブ ${slotNumber(inspection.slotId)} を読み込みますか？ 現在の未保存の進行は失われます。`,
+        "ロード", () => this.#handlers.onLoad(inspection.slotId, inspection.guard));
     });
     this.#listenSlot(deleteButton, () => {
-      if (!this.#confirmAction(`セーブ ${slotNumber(inspection.slotId)} とそのバックアップを削除しますか？`)) {
-        return;
-      }
-      this.#invoke(() => this.#handlers.onDelete(inspection.slotId, inspection.guard));
+      this.#confirm(`セーブ ${slotNumber(inspection.slotId)} とそのバックアップを削除しますか？`,
+        "削除", () => this.#handlers.onDelete(inspection.slotId, inspection.guard));
     });
     actions.append(saveButton, loadButton, deleteButton);
     if (repairButton !== null) {
@@ -339,15 +321,8 @@ export class PersistencePanel {
         const source = inspection.status === "temporary"
           ? "正常な一時保存"
           : "直前のバックアップ";
-        if (!this.#confirmAction(
-          `セーブ ${slotNumber(inspection.slotId)} を${source}から修復しますか？`
-        )) {
-          return;
-        }
-        this.#invoke(() => this.#handlers.onRepair(
-          inspection.slotId,
-          inspection.guard
-        ));
+        this.#confirm(`セーブ ${slotNumber(inspection.slotId)} を${source}から修復しますか？`,
+          "修復", () => this.#handlers.onRepair(inspection.slotId, inspection.guard));
       });
       actions.append(repairButton);
     }
@@ -366,13 +341,15 @@ export class PersistencePanel {
   }
 
   #listen(element, listener, type = "click") {
-    element.addEventListener(type, listener);
-    this.#staticBindings.push({ element, type, listener });
+    const guarded = () => { if (!this.#disposed && !this.#pendingConfirmation && !this.#busy && !element.disabled) listener(); };
+    element.addEventListener(type, guarded);
+    this.#staticBindings.push({ element, type, listener: guarded });
   }
 
   #listenSlot(element, listener, type = "click") {
-    element.addEventListener(type, listener);
-    this.#slotBindings.push({ element, type, listener });
+    const guarded = () => { if (!this.#disposed && !this.#pendingConfirmation && !this.#busy && this.#available && !element.disabled) listener(); };
+    element.addEventListener(type, guarded);
+    this.#slotBindings.push({ element, type, listener: guarded });
   }
 
   #clearSlotBindings() {
@@ -380,6 +357,33 @@ export class PersistencePanel {
       binding.element.removeEventListener(binding.type, binding.listener);
     }
     this.#slotBindings = [];
+  }
+
+  #cancelConfirmation() {
+    const pending = this.#pendingConfirmation;
+    this.#pendingConfirmation = null;
+    pending?.abort();
+  }
+
+  #confirm(message, confirmLabel, operation) {
+    if (this.#disposed || this.#busy || this.#pendingConfirmation) return;
+    const pending = new AbortController();
+    this.#pendingConfirmation = pending;
+    const finish = answer => {
+      if (this.#pendingConfirmation !== pending || this.#disposed) return;
+      this.#pendingConfirmation = null;
+      if (answer === true) this.#invoke(operation);
+    };
+    const fail = error => {
+      if (this.#pendingConfirmation !== pending) return;
+      this.#cancelConfirmation();
+      this.showStatus(error?.message ?? String(error), "error");
+    };
+    try {
+      const answer = this.#confirmAction(message, { confirmLabel, signal: pending.signal });
+      if (typeof answer?.then === "function") Promise.resolve(answer).then(finish, fail);
+      else finish(answer);
+    } catch (error) { fail(error); }
   }
 
   #invoke(operation) {

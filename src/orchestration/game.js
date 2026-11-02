@@ -418,6 +418,7 @@ export class Game {
     }
     const affected = this.#saveService.handleStorageEvent(event);
     if (affected) {
+      this.#persistencePanel.cancelPendingConfirmation();
       this.#persistencePanel.showStatus(
         "別のタブでセーブが変更されました。一覧を更新してから操作してください。",
         "warning"

@@ -32,6 +32,7 @@ test("bootstrap opens all nine chapters, starts the selected v9 battle, and load
   const result = createFakeGameResultElements();
   const title = createFakeTitleElements();
   const shell = Object.fromEntries(["stageSelectOverlay", "stageList", "stageSelectLoadButton", "closeSaveSlotsButton", "saveSlotOverlay", "closeBattleInfoButton", "battleInfoOverlay", "openSaveButton", "openLoadButton", "returnStageSelectButton", "battleInfoTitle", "battleInfoBody", "stageInfoActions", "persistenceTitle"].map((id) => [id, new FakeElement()]));
+  for (const id of ["actionConfirmationOverlay", "actionConfirmationMessage", "cancelActionButton", "confirmActionButton"]) shell[id] = new FakeElement();
   shell.stageSelectOverlay.hidden = true;
   const elementsBySelector = new Map([
     ["#battleHost", battleHost],
@@ -64,7 +65,7 @@ test("bootstrap opens all nine chapters, starts the selected v9 battle, and load
     }
   };
   globalThis.localStorage = storage;
-  globalThis.confirm = () => true;
+  globalThis.confirm = () => { throw new Error("NATIVE_CONFIRM_MUST_NOT_BE_USED"); };
   globalThis.AudioContext = FakeAudioContext;
   globalThis.fetch = createFakeAudioFetcher();
 
@@ -135,11 +136,20 @@ test("bootstrap opens all nine chapters, starts the selected v9 battle, and load
     const fallbackSlotActions = persistence.manualSlotList.children[0].children[2];
     assert.equal(fallbackSlotActions.children[3].textContent, "修復");
     fallbackSlotActions.children[3].dispatch("click");
+    assert.equal(shell.actionConfirmationOverlay.hidden, false);
+    assert.equal(storage.getItem(manualPrimaryKey), null);
+    shell.confirmActionButton.dispatch("click");
+    await waitUntil(() => storage.getItem(manualPrimaryKey) === savedRaw, "REPAIR_CONFIRMED");
     assert.equal(storage.getItem(manualPrimaryKey), savedRaw);
     assert.equal(storage.getItem(manualTemporaryKey), null);
 
     const refreshedSlotActions = persistence.manualSlotList.children[0].children[2];
     refreshedSlotActions.children[1].dispatch("click");
+    shell.cancelActionButton.dispatch("click");
+    await new Promise(setImmediate);
+    assert.equal(createdViews.length, 1);
+    refreshedSlotActions.children[1].dispatch("click");
+    shell.confirmActionButton.dispatch("click");
     await waitUntil(() => createdViews.length === 2, "SESSION_SWAP");
     const secondView = createdViews[1];
     await waitUntil(

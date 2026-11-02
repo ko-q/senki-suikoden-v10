@@ -17,6 +17,7 @@ import { createV9CharacterManager } from "../definitions/v9-characters.js";
 import { V9_OPENING_STAGE_SOURCE } from "../definitions/v9-opening-stage-source.js";
 import { createV9OpeningStageDefinition } from "../definitions/v9-opening-stages.js";
 import { PlayerShell } from "../presentation/player-shell.js";
+import { ActionConfirmation } from "../presentation/action-confirmation.js";
 
 document.title = `戦旗水滸伝 v${GAME_VERSION}`;
 const audioButton = document.querySelector("#audioButton");
@@ -61,7 +62,11 @@ const viewFactory = new BattleViewFactory({
 });
 const audioController = new AudioController();
 const sessionFactory = new BattleSessionFactory({ viewFactory, audioController });
+const actionConfirmation = new ActionConfirmation(Object.fromEntries([
+  "actionConfirmationOverlay", "actionConfirmationMessage", "cancelActionButton", "confirmActionButton"
+].map(id => [id, document.querySelector(`#${id}`)])));
 const persistencePanel = new PersistencePanel({ elements: persistenceElements,
+  confirmAction: (message, options) => actionConfirmation.ask(message, options),
   stageTitleForId: (id) => V9_OPENING_STAGE_SOURCE.find((stage) => stage.id === id)?.title ?? id });
 const resultPanel = new GameResultPanel({ elements: resultElements });
 
@@ -144,6 +149,7 @@ if (typeof globalThis.addEventListener === "function") {
     titleScreen.dispose();
     playerShell.dispose();
     game.dispose();
+    actionConfirmation.dispose();
   }, { once: true });
 }
 

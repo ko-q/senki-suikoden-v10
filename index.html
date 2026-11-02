@@ -128,6 +128,12 @@
         <div class="persistence-toolbar"><button id="closeSaveSlotsButton" type="button">戻る</button><button id="refreshSlotsButton" type="button">一覧更新</button><button id="newBattleButton" type="button">ステージ選択</button></div>
       </div>
     </section>
+    <section id="actionConfirmationOverlay" class="player-overlay action-confirmation-overlay" hidden>
+      <div class="player-card" role="dialog" aria-modal="true" aria-labelledby="actionConfirmationTitle" aria-describedby="actionConfirmationMessage">
+        <h2 id="actionConfirmationTitle">操作の確認</h2><p id="actionConfirmationMessage"></p>
+        <div class="turn-end-actions"><button id="cancelActionButton" type="button">戻る</button><button id="confirmActionButton" class="main-button" type="button">実行</button></div>
+      </div>
+    </section>
     <section id="battleInfoOverlay" class="player-overlay info-overlay" hidden>
       <div class="player-card" role="dialog" aria-modal="true" aria-labelledby="battleInfoTitle">
         <h2 id="battleInfoTitle"></h2><div id="battleInfoBody" class="battle-info-body" tabindex="0" aria-labelledby="battleInfoTitle"></div>

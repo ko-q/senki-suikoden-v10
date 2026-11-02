@@ -180,3 +180,43 @@ test("the formal manual save catalog contains exactly twenty ordered slots", () 
   assert.equal(new Set(DEFAULT_MANUAL_SLOT_IDS).size, 20);
   assert.equal(Object.isFrozen(DEFAULT_MANUAL_SLOT_IDS), true);
 });
+
+test("asynchronous save decisions run once, reject duplicate input and expire on refresh or disposal", async () => {
+  const restore = installFakeDocument(), elements = createFakePersistenceElements();
+  const decisions = [], events = [];
+  const panel = new PersistencePanel({ elements, confirmAction: (message, options) => new Promise((resolve, reject) => decisions.push({ message, ...options, resolve, reject })) });
+  panel.bindHandlers(Object.fromEntries(["Delete", "Load", "NewBattle", "Repair", "Refresh", "ResumeRecovery", "Save", "StartNewFromRecovery"]
+    .map(name => [`on${name}`, (...args) => events.push([name, ...args])])));
+  const slots = [inspection("manual_01", "occupied", summary("manual_01"))];
+  const button = index => elements.manualSlotList.children[0].children[2].children[index];
+  try {
+    panel.setSessionState({ hasSession: true, canSave: true }); panel.renderManualSlots(slots);
+    button(0).dispatch("click"); button(1).dispatch("click"); elements.newBattleButton.dispatch("click");
+    assert.equal(decisions.length, 1); assert.deepEqual(events, []);
+    decisions[0].resolve(false); await new Promise(setImmediate); assert.deepEqual(events, []);
+    button(0).dispatch("click"); decisions[1].resolve(true); await new Promise(setImmediate);
+    assert.deepEqual(events, [["Save", "manual_01"]]);
+    button(1).dispatch("click"); panel.renderManualSlots(slots);
+    assert.equal(decisions[2].signal.aborted, true);
+    decisions[2].resolve(true); await new Promise(setImmediate); assert.equal(events.length, 1);
+    button(1).dispatch("click"); decisions[3].resolve(true); await new Promise(setImmediate);
+    assert.deepEqual(events[1], ["Load", "manual_01", slots[0].guard]);
+    button(2).dispatch("click"); panel.dispose();
+    assert.equal(decisions[4].signal.aborted, true);
+    decisions[4].resolve(true); await new Promise(setImmediate); assert.equal(events.length, 2);
+  } finally { panel.dispose(); restore(); }
+});
+
+test("a rejected confirmation reports an error and releases the pending decision", async () => {
+  const restore = installFakeDocument(), elements = createFakePersistenceElements();
+  let reject, called = 0;
+  const panel = new PersistencePanel({ elements, confirmAction: () => new Promise((_, failure) => { reject = failure; called++; }) });
+  panel.bindHandlers(Object.fromEntries(["Delete", "Load", "NewBattle", "Repair", "Refresh", "ResumeRecovery", "Save", "StartNewFromRecovery"].map(name => [`on${name}`, () => assert.fail("no mutation")] )));
+  try {
+    panel.renderManualSlots([inspection("manual_01", "occupied", summary("manual_01"))]);
+    const load = elements.manualSlotList.children[0].children[2].children[1];
+    load.dispatch("click"); reject(new Error("確認を表示できません")); await new Promise(setImmediate);
+    assert.match(elements.persistenceStatus.textContent, /確認を表示できません/);
+    load.dispatch("click"); assert.equal(called, 2); panel.dispose();
+  } finally { panel.dispose(); restore(); }
+});

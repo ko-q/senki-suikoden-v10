@@ -14,6 +14,8 @@ import { TerrainInfoView, TERRAIN_NAMES } from "./terrain-info-view.js";
 import { BoardViewportLayout } from "./board-viewport-layout.js";
 import { BattleKeyboardControls } from "./battle-keyboard-controls.js";
 import { TurnEndConfirmation } from "./turn-end-confirmation.js";
+import { DialogueView } from "./dialogue-view.js";
+import { ContinueDialog } from "./continue-dialog.js";
 
 const TACTIC_BUTTONS = Object.freeze([
   Object.freeze({ key: "confusionLv1Button", type: ActionType.CONFUSION_LV1 }),
@@ -112,7 +114,8 @@ export class BattleRenderer {
   #handlersBound;
   #eventBindings;
   #boardBindings;
-  #dialoguePortrait;
+  #dialogueView;
+  #missionDialog;
   #selectedPortrait;
   #mapView;
   #selectionRing;
@@ -133,7 +136,6 @@ export class BattleRenderer {
     this.#handlersBound = false;
     this.#eventBindings = [];
     this.#boardBindings = [];
-    this.#dialoguePortrait = new CharacterPortraitView(elements.dialoguePortrait);
     this.#selectedPortrait = new CharacterPortraitView(elements.selectedUnitPortrait);
     this.#mapView = new BattleMapView(elements.board);
     this.#selectionRing = new SelectionRingView(elements.board);
@@ -209,7 +211,10 @@ export class BattleRenderer {
       element.setAttribute("aria-haspopup", "dialog");
       element.setAttribute("title", "部隊の能力詳細（クリック・長押し・Enter）");
     }
-    if (this.#elements.missionStartButton) this.#listen(this.#elements.missionStartButton, onMissionStart);
+    this.#dialogueView = new DialogueView(this.#elements, () => this.#handlers?.onNextDialogue());
+    if (this.#elements.missionStartButton) this.#missionDialog = new ContinueDialog({
+      root: this.#elements.missionOverlay, button: this.#elements.missionStartButton, onContinue: onMissionStart
+    });
 
     this.#listen(this.#elements.resetButton, () => this.#handlers?.onClear());
     this.#listen(this.#elements.endTurnButton, () => this.#handlers?.onEndTurn());
@@ -230,10 +235,6 @@ export class BattleRenderer {
     }
     this.#listen(this.#elements.pathButton, () => this.#handlers?.onPath());
     this.#listen(this.#elements.waitButton, () => this.#handlers?.onWait());
-    this.#listen(
-      this.#elements.dialogueNextButton,
-      () => this.#handlers?.onNextDialogue()
-    );
     this.#listen(
       this.#elements.facingNorthButton,
       () => this.#handlers?.onFacing(Facing.NORTH)
@@ -270,7 +271,8 @@ export class BattleRenderer {
     this.#eventBindings = [];
     this.#handlers = null;
     this.#handlersBound = false;
-    this.#dialoguePortrait.clear();
+    this.#dialogueView.dispose();
+    this.#missionDialog?.dispose();
     this.#selectedPortrait.clear();
     this.#mapView.clear();
     this.#selectionRing.clear();
@@ -286,6 +288,8 @@ export class BattleRenderer {
     );
 
     this.#currentStage = stage; this.#currentView = viewState;
+    this.#dialogueView.refreshFocus();
+    this.#missionDialog?.refreshFocus();
     if (this.#elements.battleToolbar) this.#elements.battleToolbar.hidden = stage.phase !== "PLAYER" || viewState.battleFinished === true;
     if (viewState.inputLocked) this.#detail.hide();
     this.#elements.modeValue.textContent = viewState.mode;
@@ -353,31 +357,17 @@ export class BattleRenderer {
   }
 
   renderDialogue(speech) {
-    invariant(speech !== null && typeof speech === "object", "BATTLE_SPEECH_REQUIRED");
-    this.#elements.dialogueSpeaker.textContent = speech.speaker?.name ?? speech.narratorLabel;
-    this.#elements.dialogueAction.textContent = speech.actionLabel ?? "";
-    this.#elements.dialogueAction.hidden = !speech.actionLabel;
-    this.#dialoguePortrait.render(speech.speaker);
-    this.#elements.dialogueText.textContent = speech.text;
-    this.#elements.dialogueNextButton.textContent = "進む";
-    this.#elements.dialogueOverlay.hidden = false;
+    this.#dialogueView.render(speech);
   }
 
-  hideDialogue() {
-    this.#elements.dialogueOverlay.hidden = true;
-    this.#dialoguePortrait.clear();
-    this.#elements.dialogueSpeaker.textContent = "";
-    this.#elements.dialogueAction.textContent = "";
-    this.#elements.dialogueAction.hidden = true;
-    this.#elements.dialogueText.textContent = "";
-  }
+  hideDialogue(options) { this.#dialogueView.hide(options); }
 
   showMission(briefing) {
     this.#elements.missionVictory.textContent = briefing.victory;
     this.#elements.missionDefeat.textContent = briefing.defeat;
-    this.#elements.missionOverlay.hidden = false;
+    this.#missionDialog.show();
   }
-  hideMission() { if (this.#elements.missionOverlay) this.#elements.missionOverlay.hidden = true; }
+  hideMission(options) { this.#missionDialog?.hide(options); }
 
   showInfo(text) {
     this.#elements.eventText.textContent = String(text);

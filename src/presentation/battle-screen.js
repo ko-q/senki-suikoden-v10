@@ -182,7 +182,7 @@ export class BattleScreen {
       this.#dialoguePending = null;
       pending.abortSignal.removeEventListener("abort", pending.handleAbort);
       this.#dialogueController.finish();
-      this.#renderer.hideDialogue();
+      this.#renderer.hideDialogue({ restoreFocus: false });
       pending.reject(createAbortError());
     }
     this.#effectManager.dispose();
@@ -787,7 +787,7 @@ export class BattleScreen {
       const handleAbort = () => {
         this.#missionPending = null;
         abortSignal.removeEventListener("abort", handleAbort);
-        this.#renderer.hideMission(); reject(createAbortError());
+        this.#renderer.hideMission({ restoreFocus: false }); reject(createAbortError());
       };
       this.#missionPending = { resolve, abortSignal, handleAbort };
       abortSignal.addEventListener("abort", handleAbort, { once: true });
@@ -815,7 +815,7 @@ export class BattleScreen {
         }
         this.#dialoguePending = null;
         this.#dialogueController.finish();
-        this.#renderer.hideDialogue();
+        this.#renderer.hideDialogue({ restoreFocus: false });
         reject(createAbortError());
       };
       this.#dialoguePending = { resolve, reject, abortSignal, handleAbort };

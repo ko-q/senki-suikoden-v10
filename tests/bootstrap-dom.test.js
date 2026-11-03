@@ -101,13 +101,21 @@ test("bootstrap opens all nine chapters, starts the selected v9 battle, and load
     assert.equal(persistence.audioButton.textContent, "音声：入");
     assert.equal(persistence.audioButton.attributes.get("aria-pressed"), "true");
 
-    elements.dialogueNextButton.dispatch("click");
+    elements.dialogueNextButton.dispatch("keydown", { key: "Enter" });
     assert.equal(elements.dialogueSpeaker.textContent, "朱武");
-    elements.dialogueNextButton.dispatch("click");
+    elements.dialogueNextButton.dispatch("keydown", { key: "Enter", repeat: true });
+    elements.dialogueOverlay.dispatch("keydown", { key: "Escape" });
+    assert.equal(elements.dialogueSpeaker.textContent, "朱武");
+    elements.dialogueNextButton.dispatch("keydown", { key: " " });
+    elements.dialogueNextButton.dispatch("keyup", { key: " " });
     await waitUntil(() => !elements.missionOverlay.hidden, "MISSION_BRIEFING");
     assert.equal(elements.missionVictory.textContent, "史進が北の旗へ到達、または敵軍を全滅");
     assert.equal(elements.endTurnButton.disabled, true);
-    elements.missionStartButton.dispatch("click");
+    elements.missionStartButton.dispatch("keydown", { key: "Enter", repeat: true });
+    elements.missionStartButton.dispatch("keyup", { key: " " });
+    elements.missionOverlay.dispatch("keydown", { key: "Escape" });
+    assert.equal(elements.missionOverlay.hidden, false, "intro key repeats must not skip the briefing");
+    elements.missionStartButton.dispatch("keydown", { key: "Enter" });
     await waitUntil(
       () => elements.modeValue.textContent === "UNIT_SELECT",
       "BATTLE_READY"
